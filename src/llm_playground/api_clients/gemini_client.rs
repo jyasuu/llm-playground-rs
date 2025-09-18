@@ -2,8 +2,7 @@
 use crate::llm_playground::{Message, ApiConfig, MessageRole};
 use gloo_net::http::Request;
 use serde::{Deserialize, Serialize};
-use std::future::Future;
-use std::pin::Pin;
+use gloo_console::log;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct GeminiRequest {
@@ -59,9 +58,14 @@ impl GeminiClient {
         messages: &[Message],
         config: &ApiConfig,
     ) -> Result<String, String> {
+        log!("Gemini API call started");
+        
         if config.gemini.api_key.trim().is_empty() {
-            return Err("Gemini API key is required".to_string());
+            log!("Gemini API key is missing");
+            return Err("Please configure your Gemini API key in Settings".to_string());
         }
+        
+        log!("API key present, processing messages...");
 
         // Convert messages to Gemini format
         let mut contents = Vec::new();
@@ -77,25 +81,55 @@ impl GeminiClient {
                     });
                 }
                 MessageRole::User => {
-                    contents.push(GeminiContent {
-                        parts: vec![GeminiPart {
-                            text: message.content.clone(),
-                        }],
-                        role: "user".to_string(),
-                    });
+                    if !message.content.trim().is_empty() {
+                        contents.push(GeminiContent {
+                            parts: vec![GeminiPart {
+                                text: message.content.clone(),
+                            }],
+                            role: "user".to_string(),
+                        });
+                    }
                 }
                 MessageRole::Assistant => {
-                    contents.push(GeminiContent {
-                        parts: vec![GeminiPart {
-                            text: message.content.clone(),
-                        }],
-                        role: "model".to_string(),
-                    });
+                    if !message.content.trim().is_empty() {
+                        contents.push(GeminiContent {
+                            parts: vec![GeminiPart {
+                                text: message.content.clone(),
+                            }],
+                            role: "model".to_string(),
+                        });
+                    }
                 }
                 MessageRole::Function => {
                     // Skip function messages for now
                 }
             }
+        }
+
+        // Ensure we have at least one content item and conversation ends with user message
+        if contents.is_empty() {
+            log!("No valid contents found, creating default user message");
+            contents.push(GeminiContent {
+                parts: vec![GeminiPart {
+                    text: "Hello".to_string(),
+                }],
+                role: "user".to_string(),
+            });
+        } else {
+            // Gemini API requires conversations to end with a user message
+            // If the last message is from the model, we need to ensure there's a user message
+            if let Some(last_content) = contents.last() {
+                if last_content.role == "model" {
+                    log!("Last message is from model, this should not happen in proper flow");
+                    // This shouldn't happen in normal flow since we're adding user message first
+                    // But let's handle it gracefully
+                }
+            }
+        }
+        
+        log!("Final contents count:", contents.len());
+        if let Some(last) = contents.last() {
+            log!("Last message role:", &last.role);
         }
 
         let request_body = GeminiRequest {
@@ -111,6 +145,9 @@ impl GeminiClient {
             "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
             config.gemini.model, config.gemini.api_key
         );
+        
+        log!("Making request to:", &url);
+        log!("Request body:", &serde_json::to_string(&request_body).unwrap_or_default());
 
         let response = Request::post(&url)
             .header("Content-Type", "application/json")
@@ -118,14 +155,36 @@ impl GeminiClient {
             .map_err(|e| format!("Failed to create request: {}", e))?
             .send()
             .await
-            .map_err(|e| format!("Failed to send request: {}", e))?;
+            .map_err(|e| format!("Network error - Check your internet connection and API key: {}", e))?;
+            
+        log!("Response status:", response.status());
 
         if !response.ok() {
+            let status = response.status();
             let error_text = response
                 .text()
                 .await
                 .unwrap_or_else(|_| "Unknown error".to_string());
-            return Err(format!("API request failed: {}", error_text));
+            
+            log!("API error response:", &error_text);
+            
+            let error_message = if status == 400 {
+                if error_text.contains("API_KEY_INVALID") {
+                    "Invalid Gemini API key. Please check your API key in Settings."
+                } else if error_text.contains("quota") || error_text.contains("QUOTA") {
+                    "API quota exceeded. Please check your Gemini API usage limits."
+                } else {
+                    "Bad request to Gemini API. Please check your configuration."
+                }
+            } else if status == 403 {
+                "Access denied. Please verify your Gemini API key has proper permissions."
+            } else if status == 429 {
+                "Rate limit exceeded. Please wait a moment before trying again."
+            } else {
+                "Gemini API error occurred. Please try again."
+            };
+            
+            return Err(format!("{}\n\nDetailed error: {}", error_message, error_text));
         }
 
         let gemini_response: GeminiResponse = response

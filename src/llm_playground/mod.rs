@@ -14,6 +14,7 @@ use web_sys::HtmlInputElement;
 use gloo_storage::{LocalStorage, Storage};
 use std::collections::HashMap;
 use gloo_console::log;
+use crate::llm_playground::api_clients::{GeminiClient, OpenAIClient};
 
 #[function_component(LLMPlayground)]
 pub fn llm_playground() -> Html {
@@ -201,20 +202,95 @@ pub fn llm_playground() -> Html {
                 // Save to localStorage
                 let _ = StorageManager::save_sessions(&new_sessions);
                 
-                // Simulate API response for now
+                // Make real API call
                 let sessions_clone = sessions.clone();
                 let session_id_clone = session_id.clone();
                 let is_loading_clone = is_loading.clone();
+                let api_config_clone = (*_api_config).clone();
                     
                 wasm_bindgen_futures::spawn_local(async move {
-                    gloo_timers::future::TimeoutFuture::new(1000).await;
+                    let response_content = match api_config_clone.current_provider {
+                        ApiProvider::Gemini => {
+                            log!("Calling Gemini API...");
+                            let client = GeminiClient::new();
+                            
+                            // Get all messages for context
+                            let current_sessions = (*sessions_clone).clone();
+                            if let Some(session) = current_sessions.get(&session_id_clone) {
+                                // Create messages including system prompt
+                                let mut api_messages = vec![];
+                                
+                                // Add system message if exists
+                                if !api_config_clone.system_prompt.trim().is_empty() {
+                                    api_messages.push(Message {
+                                        id: "system".to_string(),
+                                        role: MessageRole::System,
+                                        content: api_config_clone.system_prompt.clone(),
+                                        timestamp: js_sys::Date::now(),
+                                        function_call: None,
+                                        function_response: None,
+                                    });
+                                }
+                                
+                                // Add conversation history
+                                api_messages.extend(session.messages.clone());
+                                
+                                match client.send_message(&api_messages, &api_config_clone).await {
+                                    Ok(response) => response,
+                                    Err(error) => {
+                                        log!("Gemini API error:", &error);
+                                        format!("❌ **API Error**: {}", error)
+                                    }
+                                }
+                            } else {
+                                "❌ **Error**: Session not found".to_string()
+                            }
+                        },
+                        ApiProvider::OpenAI => {
+                            log!("Calling OpenAI API...");
+                            let client = OpenAIClient::new();
+                            
+                            // Get all messages for context
+                            let current_sessions = (*sessions_clone).clone();
+                            if let Some(session) = current_sessions.get(&session_id_clone) {
+                                // Create messages including system prompt
+                                let mut api_messages = vec![];
+                                
+                                // Add system message if exists
+                                if !api_config_clone.system_prompt.trim().is_empty() {
+                                    api_messages.push(Message {
+                                        id: "system".to_string(),
+                                        role: MessageRole::System,
+                                        content: api_config_clone.system_prompt.clone(),
+                                        timestamp: js_sys::Date::now(),
+                                        function_call: None,
+                                        function_response: None,
+                                    });
+                                }
+                                
+                                // Add conversation history
+                                api_messages.extend(session.messages.clone());
+                                
+                                match client.send_message(&api_messages, &api_config_clone).await {
+                                    Ok(response) => response,
+                                    Err(error) => {
+                                        log!("OpenAI API error:", &error);
+                                        format!("❌ **API Error**: {}", error)
+                                    }
+                                }
+                            } else {
+                                "❌ **Error**: Session not found".to_string()
+                            }
+                        }
+                    };
                     
+                    // Add assistant response to session
                     let mut new_sessions = (*sessions_clone).clone();
                     if let Some(session) = new_sessions.get_mut(&session_id_clone) {
                         let assistant_message = Message {
                             id: format!("msg_{}", js_sys::Date::now()),
                             role: MessageRole::Assistant,
-                            content: "This is a mock response. The actual API integration will be implemented next.".to_string(),
+                            content: response_content,
                             timestamp: js_sys::Date::now(),
                             function_call: None,
                             function_response: None,
@@ -227,6 +303,8 @@ pub fn llm_playground() -> Html {
                         is_loading_clone.set(false);
                         
                         let _ = StorageManager::save_sessions(&new_sessions);
+                    } else {
+                        is_loading_clone.set(false);
                     }
                 });
             } else {

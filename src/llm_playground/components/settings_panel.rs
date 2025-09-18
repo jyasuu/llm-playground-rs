@@ -224,6 +224,7 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
                                     onchange={on_gemini_model_change}
                                     class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700"
                                 >
+                                    <option value="gemini-2.5-flash-lite-preview-06-17">{"Gemini 2.5 Flash (Experimental)"}</option>
                                     <option value="gemini-1.5-pro">{"Gemini 1.5 Pro"}</option>
                                     <option value="gemini-1.5-flash">{"Gemini 1.5 Flash"}</option>
                                     <option value="gemini-1.0-pro">{"Gemini 1.0 Pro"}</option>

@@ -85,7 +85,7 @@ impl Default for ApiConfig {
         Self {
             gemini: GeminiConfig {
                 api_key: String::new(),
-                model: "gemini-1.5-pro".to_string(),
+                model: "gemini-2.5-flash-lite-preview-06-17".to_string(),
             },
             openai: OpenAIConfig {
                 base_url: "https://api.openai.com/v1".to_string(),
