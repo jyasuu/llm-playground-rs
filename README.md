@@ -1,5 +1,24 @@
 # llm-playground-rs
 
+```sh
+
+cargo install trunk
+rustup target add wasm32-unknown-unknown
+
+# reference sse mcp server client
+git clone https://github.com/modelcontextprotocol/rust-sdk.git
+# rust-sdk/examples/clients/src/sse.rs
+
+# reference yew framework
+git clone https://github.com/jyasuu/yew-demo.git
+
+# reference gemini and openapi client
+git clone https://github.com/jyasuu/chat-cli.git
+# chat-cli/src/gemini.rs
+# chat-cli/src/openai.rs
+
+
+```
 
 # original
 
@@ -29,8 +48,8 @@ any data storage requirement should consider use browser local storage.
         3. temperature
         4. retry and rate limit delay
         5. system prompts define
-        6. function call tools define(just a  mock define ,so when llm decide to use it just display it in chatroom and return a configurable value to llm)
-        7. structure output define(just a  mock define ,so when llm decide to use it just display it in chatroom )
+        6. function call tools define multiple tools with name ,description, parameters(just a  mock define ,so when llm decide to use it just display it in chatroom and return a configurable value to llm)
+        7. structure output define a complex schema(just a  mock define ,so when llm decide to use it just display it in chatroom )
         8. sse mcp server
 
 ## advice me others features
