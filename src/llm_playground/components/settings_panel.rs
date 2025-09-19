@@ -1,6 +1,7 @@
 use yew::prelude::*;
 use web_sys::HtmlInputElement;
 use crate::llm_playground::{ApiConfig, ApiProvider, GeminiConfig, OpenAIConfig, SharedSettings, FunctionTool};
+use crate::llm_playground::components::FunctionToolEditor;
 
 #[derive(Properties, PartialEq)]
 pub struct SettingsPanelProps {
@@ -12,6 +13,8 @@ pub struct SettingsPanelProps {
 #[function_component(SettingsPanel)]
 pub fn settings_panel(props: &SettingsPanelProps) -> Html {
     let config = use_state(|| props.config.clone());
+    let show_function_editor = use_state(|| false);
+    let editing_function_index = use_state(|| None::<usize>);
 
     // Update local state when props change
     {
@@ -152,6 +155,68 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
             let mut new_config = (*config).clone();
             new_config.system_prompt = input.value();
             config.set(new_config);
+        })
+    };
+
+    // Function tool management callbacks
+    let add_function_tool = {
+        let show_function_editor = show_function_editor.clone();
+        let editing_function_index = editing_function_index.clone();
+        Callback::from(move |_| {
+            editing_function_index.set(None);
+            show_function_editor.set(true);
+        })
+    };
+
+    let edit_function_tool = {
+        let show_function_editor = show_function_editor.clone();
+        let editing_function_index = editing_function_index.clone();
+        Callback::from(move |index: usize| {
+            editing_function_index.set(Some(index));
+            show_function_editor.set(true);
+        })
+    };
+
+    let delete_function_tool = {
+        let config = config.clone();
+        Callback::from(move |index: usize| {
+            let mut new_config = (*config).clone();
+            if index < new_config.function_tools.len() {
+                new_config.function_tools.remove(index);
+                config.set(new_config);
+            }
+        })
+    };
+
+    let save_function_tool = {
+        let config = config.clone();
+        let show_function_editor = show_function_editor.clone();
+        let editing_function_index = editing_function_index.clone();
+        Callback::from(move |tool: FunctionTool| {
+            let mut new_config = (*config).clone();
+            
+            if let Some(index) = *editing_function_index {
+                // Edit existing tool
+                if index < new_config.function_tools.len() {
+                    new_config.function_tools[index] = tool;
+                }
+            } else {
+                // Add new tool
+                new_config.function_tools.push(tool);
+            }
+            
+            config.set(new_config);
+            show_function_editor.set(false);
+            editing_function_index.set(None);
+        })
+    };
+
+    let cancel_function_editor = {
+        let show_function_editor = show_function_editor.clone();
+        let editing_function_index = editing_function_index.clone();
+        Callback::from(move |_| {
+            show_function_editor.set(false);
+            editing_function_index.set(None);
         })
     };
 
@@ -333,22 +398,74 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
                     />
                 </div>
                 
-                // Mock Functions
+                // Function Tools
                 <div>
                     <h3 class="font-medium mb-2">{"Function Tools"}</h3>
-                    {for config.function_tools.iter().map(|tool| {
+                    {for config.function_tools.iter().enumerate().map(|(index, tool)| {
+                        let edit_callback = edit_function_tool.clone();
+                        let delete_callback = delete_function_tool.clone();
+                        
+                        let edit_click = {
+                            let edit_callback = edit_callback.clone();
+                            Callback::from(move |_| edit_callback.emit(index))
+                        };
+                        
+                        let delete_click = {
+                            let delete_callback = delete_callback.clone();
+                            Callback::from(move |_| delete_callback.emit(index))
+                        };
+                        
                         html! {
-                            <div class="bg-gray-100 dark:bg-gray-700 p-4 rounded-md mb-4">
-                                <div class="flex items-center justify-between mb-2">
-                                    <span class="font-medium">{&tool.name}</span>
-                                    <button class="text-xs text-primary-600 dark:text-primary-400">{"Edit"}</button>
+                            <div key={index} class="bg-gray-100 dark:bg-gray-700 p-4 rounded-md mb-3 border border-gray-200 dark:border-gray-600">
+                                <div class="flex items-start justify-between mb-2">
+                                    <div class="flex-1">
+                                        <div class="flex items-center mb-1">
+                                            <i class="fas fa-function text-purple-500 mr-2"></i>
+                                            <span class="font-medium text-lg">{&tool.name}</span>
+                                        </div>
+                                        <p class="text-sm text-gray-600 dark:text-gray-300 mb-2">{&tool.description}</p>
+                                        
+                                        // Show parameter count
+                                        <div class="text-xs text-gray-500 dark:text-gray-400">
+                                            {
+                                                if let Some(properties) = tool.parameters.get("properties") {
+                                                    if let Some(obj) = properties.as_object() {
+                                                        format!("{} parameter(s)", obj.len())
+                                                    } else {
+                                                        "No parameters".to_string()
+                                                    }
+                                                } else {
+                                                    "No parameters".to_string()
+                                                }
+                                            }
+                                        </div>
+                                    </div>
+                                    <div class="flex space-x-2 ml-4">
+                                        <button 
+                                            onclick={edit_click}
+                                            class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded hover:bg-blue-200 dark:hover:bg-blue-900/50"
+                                            title="Edit function"
+                                        >
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button 
+                                            onclick={delete_click}
+                                            class="text-xs px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded hover:bg-red-200 dark:hover:bg-red-900/50"
+                                            title="Delete function"
+                                        >
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
                                 </div>
-                                <p class="text-sm">{&tool.description}</p>
                             </div>
                         }
                     })}
-                    <button class="flex items-center text-primary-600 dark:text-primary-400 text-sm">
-                        <i class="fas fa-plus mr-1"></i> {"Add Function"}
+                    
+                    <button 
+                        onclick={add_function_tool}
+                        class="flex items-center justify-center w-full p-3 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-md text-gray-500 dark:text-gray-400 hover:border-primary-500 hover:text-primary-500 dark:hover:border-primary-400 dark:hover:text-primary-400 transition-colors"
+                    >
+                        <i class="fas fa-plus mr-2"></i> {"Add Function Tool"}
                     </button>
                 </div>
                 
@@ -362,6 +479,25 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
                     </button>
                 </div>
             </div>
+            
+            // Function Tool Editor Modal
+            {if *show_function_editor {
+                let editing_tool = if let Some(index) = *editing_function_index {
+                    config.function_tools.get(index).cloned()
+                } else {
+                    None
+                };
+                
+                html! {
+                    <FunctionToolEditor
+                        tool={editing_tool}
+                        on_save={save_function_tool}
+                        on_cancel={cancel_function_editor}
+                    />
+                }
+            } else {
+                html! {}
+            }}
         </div>
     }
 }

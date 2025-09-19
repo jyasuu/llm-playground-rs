@@ -8,6 +8,7 @@ pub struct SidebarProps {
     pub current_session_id: Option<String>,
     pub on_new_session: Callback<()>,
     pub on_select_session: Callback<String>,
+    pub on_delete_session: Callback<String>,
     pub on_toggle_settings: Callback<()>,
 }
 
@@ -53,10 +54,18 @@ pub fn sidebar(props: &SidebarProps) -> Html {
                         {for sessions_vec.iter().map(|(session_id, session)| {
                             let is_current = props.current_session_id.as_ref() == Some(session_id);
                             let session_id_clone = (*session_id).clone();
+                            let session_id_delete = (*session_id).clone();
                             let on_select = props.on_select_session.clone();
+                            let on_delete = props.on_delete_session.clone();
                             
-                            let click_handler = Callback::from(move |_| {
+                            let click_handler = Callback::from(move |e: MouseEvent| {
+                                e.stop_propagation();
                                 on_select.emit(session_id_clone.clone());
+                            });
+
+                            let delete_handler = Callback::from(move |e: MouseEvent| {
+                                e.stop_propagation();
+                                on_delete.emit(session_id_delete.clone());
                             });
 
                             let time_ago = format_time_ago(session.updated_at);
@@ -64,9 +73,8 @@ pub fn sidebar(props: &SidebarProps) -> Html {
                             html! {
                                 <li 
                                     key={session.id.clone()}
-                                    onclick={click_handler}
                                     class={classes!(
-                                        "p-2", "rounded-md", "cursor-pointer",
+                                        "group", "relative", "rounded-md",
                                         if is_current {
                                             "bg-primary-100 dark:bg-primary-900/30"
                                         } else {
@@ -74,13 +82,29 @@ pub fn sidebar(props: &SidebarProps) -> Html {
                                         }
                                     )}
                                 >
-                                    <div class="font-medium">{&session.title}</div>
-                                    <div class="text-xs text-gray-500 dark:text-gray-400">{time_ago}</div>
-                                    {if session.pinned {
-                                        html! { <i class="fas fa-thumbtack text-xs text-yellow-500"></i> }
-                                    } else {
-                                        html! {}
-                                    }}
+                                    <div 
+                                        onclick={click_handler}
+                                        class="p-2 cursor-pointer pr-8"
+                                    >
+                                        <div class="font-medium truncate">{&session.title}</div>
+                                        <div class="flex items-center justify-between">
+                                            <div class="text-xs text-gray-500 dark:text-gray-400">{time_ago}</div>
+                                            {if session.pinned {
+                                                html! { <i class="fas fa-thumbtack text-xs text-yellow-500"></i> }
+                                            } else {
+                                                html! {}
+                                            }}
+                                        </div>
+                                    </div>
+                                    
+                                    // Delete button (visible on hover)
+                                    <button 
+                                        onclick={delete_handler}
+                                        class="absolute right-1 top-1 w-6 h-6 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-200 dark:hover:bg-red-900/50 flex items-center justify-center"
+                                        title="Delete session"
+                                    >
+                                        <i class="fas fa-times text-xs"></i>
+                                    </button>
                                 </li>
                             }
                         })}

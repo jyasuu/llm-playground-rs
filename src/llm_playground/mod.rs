@@ -139,6 +139,25 @@ pub fn llm_playground() -> Html {
         })
     };
 
+    let delete_session = {
+        let sessions = sessions.clone();
+        let current_session_id = current_session_id.clone();
+        
+        Callback::from(move |session_id: String| {
+            let mut new_sessions = (*sessions).clone();
+            new_sessions.remove(&session_id);
+            
+            // If we're deleting the current session, clear the current session
+            if current_session_id.as_ref() == Some(&session_id) {
+                current_session_id.set(None);
+                let _ = StorageManager::save_current_session_id("");
+            }
+            
+            sessions.set(new_sessions.clone());
+            let _ = StorageManager::save_sessions(&new_sessions);
+        })
+    };
+
     let update_message_input = {
         let current_message = current_message.clone();
         Callback::from(move |e: InputEvent| {
@@ -546,6 +565,7 @@ pub fn llm_playground() -> Html {
                     current_session_id={(*current_session_id).clone()}
                     on_new_session={create_new_session}
                     on_select_session={select_session}
+                    on_delete_session={delete_session}
                     on_toggle_settings={toggle_settings}
                 />
                 
