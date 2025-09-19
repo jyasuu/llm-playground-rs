@@ -92,42 +92,168 @@ pub fn message_bubble(props: &MessageBubbleProps) -> Html {
 }
 
 fn render_content(content: &str) -> Html {
-    // For now, just render as plain text with basic markdown-like formatting
-    // TODO: Add proper markdown rendering with pulldown-cmark
-    let lines: Vec<&str> = content.split('\n').collect();
+    // Enhanced markdown rendering for function calls and formatting
+    parse_markdown(content)
+}
+
+fn parse_markdown(content: &str) -> Html {
+    let mut lines = Vec::new();
+    let mut in_code_block = false;
+    let mut code_block_content = Vec::new();
+    let mut code_block_language = String::new();
+    
+    for line in content.split('\n') {
+        if line.trim().starts_with("```") {
+            if in_code_block {
+                // End of code block
+                let code_content = code_block_content.join("\n");
+                lines.push(html! {
+                    <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg my-3 overflow-x-auto border-l-4 border-blue-500">
+                        <div class="text-xs text-gray-400 mb-2">{if code_block_language.is_empty() { "Code" } else { &code_block_language }}</div>
+                        <code class="text-sm">{code_content}</code>
+                    </pre>
+                });
+                code_block_content.clear();
+                code_block_language.clear();
+                in_code_block = false;
+            } else {
+                // Start of code block
+                code_block_language = line.trim().trim_start_matches("```").to_string();
+                in_code_block = true;
+            }
+        } else if in_code_block {
+            code_block_content.push(line.to_string());
+        } else {
+            lines.push(render_line(line));
+        }
+    }
     
     html! {
-        <div class="space-y-1">
-            {for lines.iter().map(|line| {
-                html! {
-                    {if line.starts_with("```") {
-                        html! {
-                            <pre class="bg-gray-800 text-gray-100 p-3 rounded my-2 overflow-x-auto">
-                                <code>{line.trim_start_matches("```")}</code>
-                            </pre>
-                        }
-                    } else if line.starts_with("# ") {
-                        html! {
-                            <h1 class="text-lg font-bold my-2">{line.trim_start_matches("# ")}</h1>
-                        }
-                    } else if line.starts_with("## ") {
-                        html! {
-                            <h2 class="text-md font-bold my-2">{line.trim_start_matches("## ")}</h2>
-                        }
-                    } else if line.starts_with("- ") {
-                        html! {
-                            <li class="ml-4">{line.trim_start_matches("- ")}</li>
-                        }
-                    } else if line.trim().is_empty() {
-                        html! { <br/> }
-                    } else {
-                        html! {
-                            <p>{line}</p>
-                        }
-                    }}
-                }
-            })}
+        <div class="space-y-2">
+            {for lines}
         </div>
+    }
+}
+
+fn render_line(line: &str) -> Html {
+    if line.trim().is_empty() {
+        return html! { <div class="h-2"></div> };
+    }
+    
+    if line.starts_with("🔧 ") {
+        // Function call header
+        return html! {
+            <div class="flex items-center space-x-2 p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg border-l-4 border-orange-500">
+                <span class="text-orange-600 dark:text-orange-400">{"🔧"}</span>
+                <span class="font-semibold text-orange-800 dark:text-orange-300">{render_inline_formatting(&line[4..])}</span>
+            </div>
+        };
+    }
+    
+    if line.starts_with("**") && line.ends_with("**:") {
+        // Section headers like **Arguments**: or **Response**:
+        let content = line.trim_start_matches("**").trim_end_matches("**:");
+        return html! {
+            <div class="font-semibold text-gray-800 dark:text-gray-200 mt-4 mb-2 pb-1 border-b border-gray-200 dark:border-gray-600">
+                {content}
+            </div>
+        };
+    }
+    
+    if line.starts_with("# ") {
+        return html! {
+            <h1 class="text-xl font-bold my-3 text-gray-900 dark:text-gray-100">{line.trim_start_matches("# ")}</h1>
+        };
+    }
+    
+    if line.starts_with("## ") {
+        return html! {
+            <h2 class="text-lg font-semibold my-2 text-gray-800 dark:text-gray-200">{line.trim_start_matches("## ")}</h2>
+        };
+    }
+    
+    if line.starts_with("- ") {
+        return html! {
+            <div class="flex items-start space-x-2 ml-4">
+                <span class="text-gray-500 mt-1">{"•"}</span>
+                <span>{render_inline_formatting(&line[2..])}</span>
+            </div>
+        };
+    }
+    
+    html! {
+        <p class="text-gray-800 dark:text-gray-200 leading-relaxed">{render_inline_formatting(line)}</p>
+    }
+}
+
+fn render_inline_formatting(text: &str) -> Html {
+    let mut result = Vec::new();
+    let mut chars = text.chars().peekable();
+    let mut current_text = String::new();
+    
+    while let Some(ch) = chars.next() {
+        if ch == '`' {
+            // Handle inline code
+            if !current_text.is_empty() {
+                result.push(html! { <span>{current_text.clone()}</span> });
+                current_text.clear();
+            }
+            
+            let mut code_content = String::new();
+            while let Some(next_ch) = chars.next() {
+                if next_ch == '`' {
+                    break;
+                }
+                code_content.push(next_ch);
+            }
+            
+            result.push(html! {
+                <code class="bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 px-2 py-1 rounded text-sm font-mono">
+                    {code_content}
+                </code>
+            });
+        } else if ch == '*' && chars.peek() == Some(&'*') {
+            // Handle bold text
+            chars.next(); // consume second *
+            
+            if !current_text.is_empty() {
+                result.push(html! { <span>{current_text.clone()}</span> });
+                current_text.clear();
+            }
+            
+            let mut bold_content = String::new();
+            let mut found_end = false;
+            
+            while let Some(next_ch) = chars.next() {
+                if next_ch == '*' && chars.peek() == Some(&'*') {
+                    chars.next(); // consume second *
+                    found_end = true;
+                    break;
+                }
+                bold_content.push(next_ch);
+            }
+            
+            if found_end {
+                result.push(html! {
+                    <strong class="font-semibold text-gray-900 dark:text-gray-100">{bold_content}</strong>
+                });
+            } else {
+                current_text.push_str("**");
+                current_text.push_str(&bold_content);
+            }
+        } else {
+            current_text.push(ch);
+        }
+    }
+    
+    if !current_text.is_empty() {
+        result.push(html! { <span>{current_text}</span> });
+    }
+    
+    if result.is_empty() {
+        html! { <span>{text}</span> }
+    } else {
+        html! { <>{for result}</> }
     }
 }
 

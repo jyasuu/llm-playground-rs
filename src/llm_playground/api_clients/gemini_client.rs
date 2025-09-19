@@ -257,17 +257,13 @@ impl LLMClient for GeminiClient {
         config: &ApiConfig,
     ) -> Pin<Box<dyn Future<Output = Result<String, String>>>> {
         
-        log!("messages len {}",messages.len());
-        for i in 0..messages.len()
-        {
-            log!("messages content {}",&messages[i].content);
-        }
         let (contents, system_instruction) = self.convert_messages_to_contents(messages);
         let tools = self.build_tools(config);
         let api_key = config.gemini.api_key.clone();
         let model = config.gemini.model.clone();
         let temperature = config.shared_settings.temperature;
         let max_tokens = config.shared_settings.max_tokens;
+        let config_clone = config.clone();
 
         Box::pin(async move {
             log!("Gemini API call started");
@@ -338,14 +334,45 @@ impl LLMClient for GeminiClient {
                 return Err("Empty response from Gemini API".to_string());
             }
 
-            // Extract text from the first part that has text
+            // Check for text content first
             for part in &candidate.content.parts {
                 if let Some(text) = &part.text {
                     return Ok(text.clone());
                 }
             }
 
-            Err("No text content in response".to_string())
+            // Check for function calls if no text content
+            for part in &candidate.content.parts {
+                if let Some(function_call) = &part.function_call {
+                    
+                    // Extract function name and arguments
+                    if let (Some(name), Some(args)) = (
+                        function_call.get("name").and_then(|v| v.as_str()),
+                        function_call.get("args")
+                    ) {
+                        // Find the mock response from config
+                        let mock_response = config_clone
+                            .function_tools
+                            .iter()
+                            .find(|tool| tool.name == name)
+                            .map(|tool| tool.mock_response.clone())
+                            .unwrap_or_else(|| r#"{"result": "Function executed successfully"}"#.to_string());
+                        
+                        // Format the function call display
+                        let function_display = format!(
+                            "🔧 **Function Call**: `{}`\n\n**Arguments**: ```json\n{}\n```\n\n**Response**: ```json\n{}\n```",
+                            name,
+                            serde_json::to_string_pretty(args).unwrap_or_else(|_| args.to_string()),
+                            mock_response
+                        );
+                        
+                        log!("Returning function call display");
+                        return Ok(function_display);
+                    }
+                }
+            }
+
+            Err("No text or function call content in response".to_string())
         })
     }
 
@@ -361,6 +388,7 @@ impl LLMClient for GeminiClient {
         let model = config.gemini.model.clone();
         let temperature = config.shared_settings.temperature;
         let max_tokens = config.shared_settings.max_tokens;
+        let config_clone = config.clone();
 
         Box::pin(async move {
             log!("Gemini streaming API call started");
