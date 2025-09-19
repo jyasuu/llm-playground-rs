@@ -9,12 +9,31 @@ use web_sys::js_sys;
 // Stream callback type for handling streaming responses
 pub type StreamCallback = Box<dyn Fn(String, Option<serde_json::Value>) + 'static>;
 
+// Function call handler type for UI layer to handle function calls
+pub type FunctionCallHandler = Box<dyn Fn(FunctionCallRequest) -> Pin<Box<dyn Future<Output = FunctionResponse>>> + 'static>;
+
+// Represents a function call request from the LLM
+#[derive(Debug, Clone, PartialEq)]
+pub struct FunctionCallRequest {
+    pub id: String,
+    pub name: String,
+    pub arguments: serde_json::Value,
+}
+
+// Response from LLM that may contain text and/or function calls
+#[derive(Debug, Clone, PartialEq)]
+pub struct LLMResponse {
+    pub content: Option<String>,
+    pub function_calls: Vec<FunctionCallRequest>,
+    pub finish_reason: Option<String>,
+}
+
 pub trait LLMClient {
     fn send_message(
         &self,
         messages: &[Message],
         config: &ApiConfig,
-    ) -> Pin<Box<dyn Future<Output = Result<String, String>>>>;
+    ) -> Pin<Box<dyn Future<Output = Result<LLMResponse, String>>>>;
     
     fn send_message_stream(
         &self,
@@ -24,6 +43,12 @@ pub trait LLMClient {
     ) -> Pin<Box<dyn Future<Output = Result<(), String>>>>;
     
     fn client_name(&self) -> &str;
+    
+    // Get available models from the API
+    fn get_available_models(
+        &self,
+        config: &ApiConfig,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<String>, String>>>>;
 }
 
 // Trait for conversation management

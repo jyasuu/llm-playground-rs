@@ -235,12 +235,111 @@ pub fn llm_playground() -> Html {
                             // Add conversation history from the updated session
                             api_messages.extend(updated_session.messages.clone());
                                 
-                            match client.send_message(&api_messages, &api_config_clone).await {
-                                Ok(response) => response,
-                                Err(error) => {
-                                    log!("Gemini API error:", &error);
-                                    format!("❌ **API Error**: {}", error)
+                            // Handle function calls automatically with feedback loop
+                            let mut final_response = String::new();
+                            let mut current_messages = api_messages.clone();
+                            let mut max_iterations = 5; // Prevent infinite loops
+                            
+                            loop {
+                                match client.send_message(&current_messages, &api_config_clone).await {
+                                    Ok(response) => {
+                                        // Add any text content to final response
+                                        if let Some(content) = &response.content {
+                                            if !final_response.is_empty() {
+                                                final_response.push_str("\n\n");
+                                            }
+                                            final_response.push_str(content);
+                                        }
+                                        
+                                        // If no function calls, we're done
+                                        if response.function_calls.is_empty() {
+                                            break;
+                                        }
+                                        
+                                        // Process function calls
+                                        if !final_response.is_empty() {
+                                            final_response.push_str("\n\n");
+                                        }
+                                        
+                                        // Add assistant message with function calls to conversation
+                                        let assistant_message = Message {
+                                            id: format!("msg_fc_{}", js_sys::Date::now()),
+                                            role: MessageRole::Assistant,
+                                            content: response.content.unwrap_or_default(),
+                                            timestamp: js_sys::Date::now(),
+                                            function_call: if let Some(fc) = response.function_calls.first() {
+                                                Some(serde_json::json!({
+                                                    "name": fc.name,
+                                                    "args": fc.arguments
+                                                }))
+                                            } else { None },
+                                            function_response: None,
+                                        };
+                                        current_messages.push(assistant_message);
+                                        
+                                        // Execute each function call and add responses
+                                        for function_call in &response.function_calls {
+                                            // Find mock response from config
+                                            let mock_response = api_config_clone
+                                                .function_tools
+                                                .iter()
+                                                .find(|tool| tool.name == function_call.name)
+                                                .map(|tool| tool.mock_response.clone())
+                                                .unwrap_or_else(|| r#"{"result": "Function executed successfully"}"#.to_string());
+                                            
+                                            // Parse mock response as JSON
+                                            let response_value = serde_json::from_str(&mock_response)
+                                                .unwrap_or_else(|_| serde_json::json!({"result": mock_response}));
+                                            
+                                            // Add function response message to conversation
+                                            let function_response_message = Message {
+                                                id: format!("msg_fr_{}", js_sys::Date::now()),
+                                                role: MessageRole::Function,
+                                                content: format!("Function {} executed", function_call.name),
+                                                timestamp: js_sys::Date::now(),
+                                                function_call: None,
+                                                function_response: Some(serde_json::json!({
+                                                    "id": function_call.id,
+                                                    "name": function_call.name,
+                                                    "response": response_value
+                                                })),
+                                            };
+                                            current_messages.push(function_response_message);
+                                            
+                                            // Add to display
+                                            final_response.push_str(&format!(
+                                                "🔧 **Function**: `{}` → {}",
+                                                function_call.name,
+                                                serde_json::to_string(&response_value).unwrap_or_else(|_| "Invalid response".to_string())
+                                            ));
+                                            if function_call != response.function_calls.last().unwrap() {
+                                                final_response.push_str("\n");
+                                            }
+                                        }
+                                        
+                                        // Check iteration limit
+                                        max_iterations -= 1;
+                                        if max_iterations <= 0 {
+                                            final_response.push_str("\n\n⚠️ Maximum function call iterations reached");
+                                            break;
+                                        }
+                                    },
+                                    Err(error) => {
+                                        log!("Gemini API error:", &error);
+                                        if final_response.is_empty() {
+                                            final_response = format!("❌ **API Error**: {}", error);
+                                        } else {
+                                            final_response.push_str(&format!("\n\n❌ **API Error**: {}", error));
+                                        }
+                                        break;
+                                    }
                                 }
+                            }
+                            
+                            if final_response.is_empty() {
+                                "No response from API".to_string()
+                            } else {
+                                final_response
                             }
                         },
                         ApiProvider::OpenAI => {
@@ -265,12 +364,111 @@ pub fn llm_playground() -> Html {
                             // Add conversation history from the updated session
                             api_messages.extend(updated_session.messages.clone());
                             
-                            match client.send_message(&api_messages, &api_config_clone).await {
-                                Ok(response) => response,
-                                Err(error) => {
-                                    log!("OpenAI API error:", &error);
-                                    format!("❌ **API Error**: {}", error)
+                            // Handle function calls automatically with feedback loop
+                            let mut final_response = String::new();
+                            let mut current_messages = api_messages.clone();
+                            let mut max_iterations = 5; // Prevent infinite loops
+                            
+                            loop {
+                                match client.send_message(&current_messages, &api_config_clone).await {
+                                    Ok(response) => {
+                                        // Add any text content to final response
+                                        if let Some(content) = &response.content {
+                                            if !final_response.is_empty() {
+                                                final_response.push_str("\n\n");
+                                            }
+                                            final_response.push_str(content);
+                                        }
+                                        
+                                        // If no function calls, we're done
+                                        if response.function_calls.is_empty() {
+                                            break;
+                                        }
+                                        
+                                        // Process function calls
+                                        if !final_response.is_empty() {
+                                            final_response.push_str("\n\n");
+                                        }
+                                        
+                                        // Add assistant message with function calls to conversation
+                                        let assistant_message = Message {
+                                            id: format!("msg_fc_{}", js_sys::Date::now()),
+                                            role: MessageRole::Assistant,
+                                            content: response.content.unwrap_or_default(),
+                                            timestamp: js_sys::Date::now(),
+                                            function_call: if let Some(fc) = response.function_calls.first() {
+                                                Some(serde_json::json!({
+                                                    "name": fc.name,
+                                                    "args": fc.arguments
+                                                }))
+                                            } else { None },
+                                            function_response: None,
+                                        };
+                                        current_messages.push(assistant_message);
+                                        
+                                        // Execute each function call and add responses
+                                        for function_call in &response.function_calls {
+                                            // Find mock response from config
+                                            let mock_response = api_config_clone
+                                                .function_tools
+                                                .iter()
+                                                .find(|tool| tool.name == function_call.name)
+                                                .map(|tool| tool.mock_response.clone())
+                                                .unwrap_or_else(|| r#"{"result": "Function executed successfully"}"#.to_string());
+                                            
+                                            // Parse mock response as JSON
+                                            let response_value = serde_json::from_str(&mock_response)
+                                                .unwrap_or_else(|_| serde_json::json!({"result": mock_response}));
+                                            
+                                            // Add function response message to conversation
+                                            let function_response_message = Message {
+                                                id: format!("msg_fr_{}", js_sys::Date::now()),
+                                                role: MessageRole::Function,
+                                                content: format!("Function {} executed", function_call.name),
+                                                timestamp: js_sys::Date::now(),
+                                                function_call: None,
+                                                function_response: Some(serde_json::json!({
+                                                    "id": function_call.id,
+                                                    "name": function_call.name,
+                                                    "response": response_value
+                                                })),
+                                            };
+                                            current_messages.push(function_response_message);
+                                            
+                                            // Add to display
+                                            final_response.push_str(&format!(
+                                                "🔧 **Function**: `{}` → {}",
+                                                function_call.name,
+                                                serde_json::to_string(&response_value).unwrap_or_else(|_| "Invalid response".to_string())
+                                            ));
+                                            if function_call != response.function_calls.last().unwrap() {
+                                                final_response.push_str("\n");
+                                            }
+                                        }
+                                        
+                                        // Check iteration limit
+                                        max_iterations -= 1;
+                                        if max_iterations <= 0 {
+                                            final_response.push_str("\n\n⚠️ Maximum function call iterations reached");
+                                            break;
+                                        }
+                                    },
+                                    Err(error) => {
+                                        log!("OpenAI API error:", &error);
+                                        if final_response.is_empty() {
+                                            final_response = format!("❌ **API Error**: {}", error);
+                                        } else {
+                                            final_response.push_str(&format!("\n\n❌ **API Error**: {}", error));
+                                        }
+                                        break;
+                                    }
                                 }
+                            }
+                            
+                            if final_response.is_empty() {
+                                "No response from API".to_string()
+                            } else {
+                                final_response
                             }
                         }
                     };

@@ -1,6 +1,6 @@
 // Gemini API client for WASM
 use crate::llm_playground::{Message, ApiConfig, MessageRole};
-use crate::llm_playground::api_clients::{LLMClient, ConversationManager, ConversationMessage, FunctionResponse, StreamCallback};
+use crate::llm_playground::api_clients::{LLMClient, ConversationManager, ConversationMessage, FunctionResponse, StreamCallback, FunctionCallRequest, LLMResponse};
 use gloo_net::http::Request;
 use serde::{Deserialize, Serialize};
 use gloo_console::log;
@@ -255,7 +255,7 @@ impl LLMClient for GeminiClient {
         &self,
         messages: &[Message],
         config: &ApiConfig,
-    ) -> Pin<Box<dyn Future<Output = Result<String, String>>>> {
+    ) -> Pin<Box<dyn Future<Output = Result<LLMResponse, String>>>> {
         
         let (contents, system_instruction) = self.convert_messages_to_contents(messages);
         let tools = self.build_tools(config);
@@ -263,7 +263,6 @@ impl LLMClient for GeminiClient {
         let model = config.gemini.model.clone();
         let temperature = config.shared_settings.temperature;
         let max_tokens = config.shared_settings.max_tokens;
-        let config_clone = config.clone();
 
         Box::pin(async move {
             log!("Gemini API call started");
@@ -334,45 +333,39 @@ impl LLMClient for GeminiClient {
                 return Err("Empty response from Gemini API".to_string());
             }
 
-            // Check for text content first
+            let mut content = None;
+            let mut function_calls = Vec::new();
+
+            // Process all parts to extract text content and function calls
             for part in &candidate.content.parts {
                 if let Some(text) = &part.text {
-                    return Ok(text.clone());
+                    content = Some(text.clone());
                 }
-            }
-
-            // Check for function calls if no text content
-            for part in &candidate.content.parts {
+                
                 if let Some(function_call) = &part.function_call {
-                    
                     // Extract function name and arguments
                     if let (Some(name), Some(args)) = (
                         function_call.get("name").and_then(|v| v.as_str()),
                         function_call.get("args")
                     ) {
-                        // Find the mock response from config
-                        let mock_response = config_clone
-                            .function_tools
-                            .iter()
-                            .find(|tool| tool.name == name)
-                            .map(|tool| tool.mock_response.clone())
-                            .unwrap_or_else(|| r#"{"result": "Function executed successfully"}"#.to_string());
+                        // Generate a unique ID for this function call
+                        let id = format!("fc-{}-{}", name, js_sys::Date::now() as u64);
                         
-                        // Format the function call display
-                        let function_display = format!(
-                            "🔧 **Function Call**: `{}`\n\n**Arguments**: ```json\n{}\n```\n\n**Response**: ```json\n{}\n```",
-                            name,
-                            serde_json::to_string_pretty(args).unwrap_or_else(|_| args.to_string()),
-                            mock_response
-                        );
-                        
-                        log!("Returning function call display");
-                        return Ok(function_display);
+                        function_calls.push(FunctionCallRequest {
+                            id,
+                            name: name.to_string(),
+                            arguments: args.clone(),
+                        });
                     }
                 }
             }
 
-            Err("No text or function call content in response".to_string())
+            // Return structured response that UI layer can handle
+            Ok(LLMResponse {
+                content,
+                function_calls,
+                finish_reason: candidate.finish_reason.clone(),
+            })
         })
     }
 
@@ -442,6 +435,72 @@ impl LLMClient for GeminiClient {
 
     fn client_name(&self) -> &str {
         "Gemini"
+    }
+
+    fn get_available_models(
+        &self,
+        config: &ApiConfig,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<String>, String>>>> {
+        let api_key = config.gemini.api_key.clone();
+
+        Box::pin(async move {
+            if api_key.trim().is_empty() {
+                return Err("Please configure your Gemini API key to fetch models".to_string());
+            }
+
+            let url = format!(
+                "https://generativelanguage.googleapis.com/v1beta/models?key={}",
+                api_key
+            );
+
+            let response = Request::get(&url)
+                .send()
+                .await
+                .map_err(|e| format!("Failed to fetch models: {}", e))?;
+
+            if !response.ok() {
+                let status = response.status();
+                return Err(format!("Failed to fetch models, status: {}", status));
+            }
+
+            #[derive(Deserialize)]
+            struct ModelsResponse {
+                models: Vec<ModelInfo>,
+            }
+
+            #[derive(Deserialize)]
+            struct ModelInfo {
+                name: String,
+                #[serde(rename = "displayName")]
+                display_name: Option<String>,
+            }
+
+            let models_response: ModelsResponse = response
+                .json()
+                .await
+                .map_err(|e| format!("Failed to parse models response: {}", e))?;
+
+            // Extract model names and filter for generative models
+            let model_names: Vec<String> = models_response
+                .models
+                .into_iter()
+                .filter_map(|model| {
+                    // Extract the model name from the full path (e.g., "models/gemini-pro" -> "gemini-pro")
+                    if let Some(model_name) = model.name.strip_prefix("models/") {
+                        // Filter for generative models (exclude embedding models, etc.)
+                        if model_name.contains("gemini") && !model_name.contains("embedding") {
+                            Some(model_name.to_string())
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            Ok(model_names)
+        })
     }
 }
 

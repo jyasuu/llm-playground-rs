@@ -1,6 +1,6 @@
 // OpenAI-compatible API client for WASM
 use crate::llm_playground::{Message, ApiConfig, MessageRole};
-use crate::llm_playground::api_clients::{LLMClient, ConversationManager, ConversationMessage, FunctionResponse, StreamCallback};
+use crate::llm_playground::api_clients::{LLMClient, ConversationManager, ConversationMessage, FunctionResponse, StreamCallback, FunctionCallRequest, LLMResponse};
 use gloo_net::http::Request;
 use serde::{Deserialize, Serialize};
 use gloo_console::log;
@@ -209,13 +209,20 @@ impl LLMClient for OpenAIClient {
         &self,
         messages: &[Message],
         config: &ApiConfig,
-    ) -> Pin<Box<dyn Future<Output = Result<String, String>>>> {
+    ) -> Pin<Box<dyn Future<Output = Result<LLMResponse, String>>>> {
         let self_clone = self.clone();
         let messages_clone = messages.to_vec();
         let config_clone = config.clone();
 
         Box::pin(async move {
-            self_clone.send_message_internal(&messages_clone, &config_clone).await
+            match self_clone.send_message_internal(&messages_clone, &config_clone).await {
+                Ok(content) => Ok(LLMResponse {
+                    content: Some(content),
+                    function_calls: Vec::new(), // TODO: Implement function call parsing for OpenAI
+                    finish_reason: Some("stop".to_string()),
+                }),
+                Err(e) => Err(e),
+            }
         })
     }
 
@@ -279,6 +286,69 @@ impl LLMClient for OpenAIClient {
 
     fn client_name(&self) -> &str {
         "OpenAI"
+    }
+
+    fn get_available_models(
+        &self,
+        config: &ApiConfig,
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<String>, String>>>> {
+        let api_key = config.openai.api_key.clone();
+        let base_url = config.openai.base_url.clone();
+
+        Box::pin(async move {
+            if api_key.trim().is_empty() {
+                return Err("Please configure your OpenAI API key to fetch models".to_string());
+            }
+
+            let url = format!("{}/models", base_url);
+
+            let response = Request::get(&url)
+                .header("Authorization", &format!("Bearer {}", api_key))
+                .send()
+                .await
+                .map_err(|e| format!("Failed to fetch models: {}", e))?;
+
+            if !response.ok() {
+                let status = response.status();
+                return Err(format!("Failed to fetch models, status: {}", status));
+            }
+
+            #[derive(Deserialize)]
+            struct ModelsResponse {
+                data: Vec<ModelInfo>,
+            }
+
+            #[derive(Deserialize)]
+            struct ModelInfo {
+                id: String,
+                object: String,
+            }
+
+            let models_response: ModelsResponse = response
+                .json()
+                .await
+                .map_err(|e| format!("Failed to parse models response: {}", e))?;
+
+            // Filter for chat completion models
+            let model_names: Vec<String> = models_response
+                .data
+                .into_iter()
+                .filter_map(|model| {
+                    if model.object == "model" && (
+                        model.id.starts_with("gpt-") ||
+                        model.id.starts_with("claude-") ||
+                        model.id.contains("chat") ||
+                        model.id.contains("instruct")
+                    ) {
+                        Some(model.id)
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            Ok(model_names)
+        })
     }
 }
 
