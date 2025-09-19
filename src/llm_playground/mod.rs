@@ -10,7 +10,7 @@ pub use api_clients::*;
 pub use types::*;
 
 use yew::prelude::*;
-use web_sys::HtmlInputElement;
+use web_sys::HtmlTextAreaElement;
 use gloo_storage::{LocalStorage, Storage};
 use std::collections::HashMap;
 use gloo_console::log;
@@ -142,8 +142,8 @@ pub fn llm_playground() -> Html {
     let update_message_input = {
         let current_message = current_message.clone();
         Callback::from(move |e: InputEvent| {
-            let input: HtmlInputElement = e.target_unchecked_into();
-            current_message.set(input.value());
+            let textarea: web_sys::HtmlTextAreaElement = e.target_unchecked_into();
+            current_message.set(textarea.value());
         })
     };
 
@@ -194,6 +194,9 @@ pub fn llm_playground() -> Html {
                     log!("Would send message to API:", &session.messages.last().unwrap().content);
                 }
                 
+                // Get the updated session before async operations
+                let updated_session = new_sessions.get(session_id).unwrap().clone();
+                
                 // Set state after mutations
                 sessions.set(new_sessions.clone());
                 current_message.set(String::new());
@@ -214,72 +217,60 @@ pub fn llm_playground() -> Html {
                             log!("Calling Gemini API...");
                             let client = GeminiClient::new();
                             
-                            // Get all messages for context
-                            let current_sessions = (*sessions_clone).clone();
-                            if let Some(session) = current_sessions.get(&session_id_clone) {
-                                // Create messages including system prompt
-                                let mut api_messages = vec![];
+                            // Create messages including system prompt
+                            let mut api_messages = vec![];
+                            
+                            // Add system message if exists
+                            if !api_config_clone.system_prompt.trim().is_empty() {
+                                api_messages.push(Message {
+                                    id: "system".to_string(),
+                                    role: MessageRole::System,
+                                    content: api_config_clone.system_prompt.clone(),
+                                    timestamp: js_sys::Date::now(),
+                                    function_call: None,
+                                    function_response: None,
+                                });
+                            }
+                            
+                            // Add conversation history from the updated session
+                            api_messages.extend(updated_session.messages.clone());
                                 
-                                // Add system message if exists
-                                if !api_config_clone.system_prompt.trim().is_empty() {
-                                    api_messages.push(Message {
-                                        id: "system".to_string(),
-                                        role: MessageRole::System,
-                                        content: api_config_clone.system_prompt.clone(),
-                                        timestamp: js_sys::Date::now(),
-                                        function_call: None,
-                                        function_response: None,
-                                    });
+                            match client.send_message(&api_messages, &api_config_clone).await {
+                                Ok(response) => response,
+                                Err(error) => {
+                                    log!("Gemini API error:", &error);
+                                    format!("❌ **API Error**: {}", error)
                                 }
-                                
-                                // Add conversation history
-                                api_messages.extend(session.messages.clone());
-                                
-                                match client.send_message(&api_messages, &api_config_clone).await {
-                                    Ok(response) => response,
-                                    Err(error) => {
-                                        log!("Gemini API error:", &error);
-                                        format!("❌ **API Error**: {}", error)
-                                    }
-                                }
-                            } else {
-                                "❌ **Error**: Session not found".to_string()
                             }
                         },
                         ApiProvider::OpenAI => {
                             log!("Calling OpenAI API...");
                             let client = OpenAIClient::new();
                             
-                            // Get all messages for context
-                            let current_sessions = (*sessions_clone).clone();
-                            if let Some(session) = current_sessions.get(&session_id_clone) {
-                                // Create messages including system prompt
-                                let mut api_messages = vec![];
-                                
-                                // Add system message if exists
-                                if !api_config_clone.system_prompt.trim().is_empty() {
-                                    api_messages.push(Message {
-                                        id: "system".to_string(),
-                                        role: MessageRole::System,
-                                        content: api_config_clone.system_prompt.clone(),
-                                        timestamp: js_sys::Date::now(),
-                                        function_call: None,
-                                        function_response: None,
-                                    });
+                            // Create messages including system prompt
+                            let mut api_messages = vec![];
+                            
+                            // Add system message if exists
+                            if !api_config_clone.system_prompt.trim().is_empty() {
+                                api_messages.push(Message {
+                                    id: "system".to_string(),
+                                    role: MessageRole::System,
+                                    content: api_config_clone.system_prompt.clone(),
+                                    timestamp: js_sys::Date::now(),
+                                    function_call: None,
+                                    function_response: None,
+                                });
+                            }
+                            
+                            // Add conversation history from the updated session
+                            api_messages.extend(updated_session.messages.clone());
+                            
+                            match client.send_message(&api_messages, &api_config_clone).await {
+                                Ok(response) => response,
+                                Err(error) => {
+                                    log!("OpenAI API error:", &error);
+                                    format!("❌ **API Error**: {}", error)
                                 }
-                                
-                                // Add conversation history
-                                api_messages.extend(session.messages.clone());
-                                
-                                match client.send_message(&api_messages, &api_config_clone).await {
-                                    Ok(response) => response,
-                                    Err(error) => {
-                                        log!("OpenAI API error:", &error);
-                                        format!("❌ **API Error**: {}", error)
-                                    }
-                                }
-                            } else {
-                                "❌ **Error**: Session not found".to_string()
                             }
                         }
                     };
