@@ -174,6 +174,7 @@ pub fn llm_playground() -> Html {
         let is_loading = is_loading.clone();
         
         Callback::from(move |_| {
+            let sessions = sessions.clone();
             log!("Send button clicked!");
             log!("Current message:", &*current_message);
             log!("Is loading:", *is_loading);
@@ -216,16 +217,10 @@ pub fn llm_playground() -> Html {
                 // Get the updated session before async operations
                 let updated_session = new_sessions.get(session_id).unwrap().clone();
                 
-                // Set state after mutations
-                sessions.set(new_sessions.clone());
                 current_message.set(String::new());
                 is_loading.set(true);
                 
-                // Save to localStorage
-                let _ = StorageManager::save_sessions(&new_sessions);
-                
                 // Make real API call
-                let sessions_clone = sessions.clone();
                 let session_id_clone = session_id.clone();
                 let is_loading_clone = is_loading.clone();
                 let api_config_clone = (*_api_config).clone();
@@ -294,7 +289,15 @@ pub fn llm_playground() -> Html {
                                             } else { None },
                                             function_response: None,
                                         };
-                                        current_messages.push(assistant_message);
+                                        current_messages.push(assistant_message.clone());
+                                        
+                                        // Save assistant function call message to session immediately for display
+                                        {
+                                            if let Some(session) = new_sessions.get_mut(&session_id_clone) {
+                                                session.messages.push(assistant_message);
+                                                session.updated_at = js_sys::Date::now();
+                                            }
+                                        }
                                         
                                         // Execute each function call and add responses
                                         for function_call in &response.function_calls {
@@ -323,9 +326,17 @@ pub fn llm_playground() -> Html {
                                                     "response": response_value
                                                 })),
                                             };
-                                            current_messages.push(function_response_message);
+                                            current_messages.push(function_response_message.clone());
                                             
-                                            // Add to display
+                                            // Save function response message to session immediately for display
+                                            {
+                                                if let Some(session) = new_sessions.get_mut(&session_id_clone) {
+                                                    session.messages.push(function_response_message);
+                                                    session.updated_at = js_sys::Date::now();
+                                                }
+                                            }
+                                            
+                                            // Add to display (keeping for final response text)
                                             final_response.push_str(&format!(
                                                 "🔧 **Function**: `{}` → {}",
                                                 function_call.name,
@@ -423,7 +434,15 @@ pub fn llm_playground() -> Html {
                                             } else { None },
                                             function_response: None,
                                         };
-                                        current_messages.push(assistant_message);
+                                        current_messages.push(assistant_message.clone());
+                                        
+                                        // Save assistant function call message to session immediately for display
+                                        {
+                                            if let Some(session) = new_sessions.get_mut(&session_id_clone) {
+                                                session.messages.push(assistant_message);
+                                                session.updated_at = js_sys::Date::now();
+                                            }
+                                        }
                                         
                                         // Execute each function call and add responses
                                         for function_call in &response.function_calls {
@@ -452,9 +471,16 @@ pub fn llm_playground() -> Html {
                                                     "response": response_value
                                                 })),
                                             };
-                                            current_messages.push(function_response_message);
+                                            current_messages.push(function_response_message.clone());
                                             
-                                            // Add to display
+                                            // Save function response message to session immediately for display
+                                            {
+                                                if let Some(session) = new_sessions.get_mut(&session_id_clone) {
+                                                    session.messages.push(function_response_message);
+                                                }
+                                            }
+                                            
+                                            // Add to display (keeping for final response text)
                                             final_response.push_str(&format!(
                                                 "🔧 **Function**: `{}` → {}",
                                                 function_call.name,
@@ -492,30 +518,35 @@ pub fn llm_playground() -> Html {
                         }
                     };
                     
-                    // Add assistant response to session
-                    let mut new_sessions = (*sessions_clone).clone();
-                    if let Some(session) = new_sessions.get_mut(&session_id_clone) {
-                        let assistant_message = Message {
-                            id: format!("msg_{}", js_sys::Date::now()),
-                            role: MessageRole::Assistant,
-                            content: response_content,
-                            timestamp: js_sys::Date::now(),
-                            function_call: None,
-                            function_response: None,
-                        };
-                        
-                        session.messages.push(assistant_message);
-                        session.updated_at = js_sys::Date::now();
-                        
-                        sessions_clone.set(new_sessions.clone());
-                        is_loading_clone.set(false);
-                        
-                        let _ = StorageManager::save_sessions(&new_sessions);
-                    } else {
-                        is_loading_clone.set(false);
+                    // Add final assistant response to session only if it has content
+                    if !response_content.trim().is_empty() {
+                        if let Some(session) = new_sessions.get_mut(&session_id_clone) {
+                            let assistant_message = Message {
+                                id: format!("msg_{}", js_sys::Date::now()),
+                                role: MessageRole::Assistant,
+                                content: response_content,
+                                timestamp: js_sys::Date::now(),
+                                function_call: None,
+                                function_response: None,
+                            };
+                            
+                            session.messages.push(assistant_message);
+                            session.updated_at = js_sys::Date::now();
+                            
+                        }
                     }
+                    is_loading_clone.set(false);
+                        
+                    // Set state after mutations
+                    sessions.set(new_sessions.clone());
+                    
+                    // Save to localStorage
+                    let _ = StorageManager::save_sessions(&new_sessions);
                 });
+                
+
             } else {
+                let mut new_sessions = (*sessions).clone();
                 log!("No session selected! Creating a new session first...");
                 // If no session is selected, create one first
                 let new_session = ChatSession {
@@ -527,20 +558,24 @@ pub fn llm_playground() -> Html {
                     pinned: false,
                 };
                 
-                let mut new_sessions = (*sessions).clone();
                 new_sessions.insert(new_session.id.clone(), new_session.clone());
-                sessions.set(new_sessions.clone());
                 current_session_id.set(Some(new_session.id.clone()));
                 
-                // Save to localStorage
-                let _ = StorageManager::save_sessions(&new_sessions);
                 let _ = StorageManager::save_current_session_id(&new_session.id);
                 
                 log!("Created new session:", &new_session.id);
                 
                 // The session will be available in the next render cycle
                 // For now, just return and let the user click send again
+                
+                // Set state after mutations
+                sessions.set(new_sessions.clone());
+                
+                // Save to localStorage
+                let _ = StorageManager::save_sessions(&new_sessions);
             }
+
+            
         })
     };
 

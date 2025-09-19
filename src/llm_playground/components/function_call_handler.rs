@@ -164,19 +164,61 @@ pub fn function_call_handler(props: &FunctionCallHandlerProps) -> Html {
                     }}
 
                     <div class="mt-3">
-                        <h5 class="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">{"Arguments:"}</h5>
-                        <pre class="bg-blue-100 dark:bg-blue-800 p-3 rounded text-xs overflow-x-auto">
-                            <code>{serde_json::to_string_pretty(&props.function_call.arguments).unwrap_or_else(|_| "Invalid JSON".to_string())}</code>
-                        </pre>
+                        <h5 class="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">{"Function Parameters:"}</h5>
+                        <div class="bg-white dark:bg-gray-800 rounded-md p-3 border border-blue-200 dark:border-blue-600">
+                            {if let Some(args_obj) = props.function_call.arguments.as_object() {
+                                if args_obj.is_empty() {
+                                    html! {
+                                        <div class="text-sm text-gray-500 dark:text-gray-400 italic">{"No parameters"}</div>
+                                    }
+                                } else {
+                                    html! {
+                                        <div class="space-y-2">
+                                            {for args_obj.iter().map(|(key, value)| {
+                                                html! {
+                                                    <div class="flex items-start">
+                                                        <span class="text-xs font-mono bg-blue-100 dark:bg-blue-700 px-2 py-1 rounded mr-3 text-blue-600 dark:text-blue-400 font-semibold min-w-0 flex-shrink-0">
+                                                            {key}
+                                                        </span>
+                                                        <span class="text-xs font-mono text-gray-800 dark:text-gray-200 flex-1 break-all">
+                                                            {format!("{}", value)}
+                                                        </span>
+                                                    </div>
+                                                }
+                                            })}
+                                        </div>
+                                    }
+                                }
+                            } else {
+                                html! {
+                                    <pre class="text-xs font-mono text-gray-800 dark:text-gray-200 overflow-x-auto">
+                                        <code>{serde_json::to_string_pretty(&props.function_call.arguments).unwrap_or_else(|_| "Invalid parameters".to_string())}</code>
+                                    </pre>
+                                }
+                            }}
+                        </div>
                     </div>
 
                     {if let Some(resp) = response.as_ref() {
                         html! {
-                            <div class="mt-3">
-                                <h5 class="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">{"Response:"}</h5>
-                                <pre class="bg-green-100 dark:bg-green-800 p-3 rounded text-xs overflow-x-auto">
-                                    <code>{serde_json::to_string_pretty(&resp.response).unwrap_or_else(|_| "Invalid JSON".to_string())}</code>
-                                </pre>
+                            <div class="mt-4">
+                                <div class="flex items-center mb-2">
+                                    <i class="fas fa-check-circle text-green-600 dark:text-green-400 mr-2"></i>
+                                    <h5 class="text-sm font-medium text-green-900 dark:text-green-100">{"Function Response:"}</h5>
+                                </div>
+                                <div class="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-md p-3 border border-green-200 dark:border-green-600">
+                                    <div class="mb-2">
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300">
+                                            <i class="fas fa-reply mr-1"></i>
+                                            {&resp.name}
+                                        </span>
+                                    </div>
+                                    <div class="bg-white dark:bg-gray-800 rounded p-3 border border-gray-200 dark:border-gray-600">
+                                        <pre class="text-xs font-mono text-gray-800 dark:text-gray-200 overflow-x-auto">
+                                            <code>{serde_json::to_string_pretty(&resp.response).unwrap_or_else(|_| "Invalid response".to_string())}</code>
+                                        </pre>
+                                    </div>
+                                </div>
                             </div>
                         }
                     } else {
