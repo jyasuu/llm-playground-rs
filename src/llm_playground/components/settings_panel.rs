@@ -1,7 +1,7 @@
 use yew::prelude::*;
 use web_sys::HtmlInputElement;
 use crate::llm_playground::{ApiConfig, ApiProvider, GeminiConfig, OpenAIConfig, SharedSettings, FunctionTool};
-use crate::llm_playground::components::FunctionToolEditor;
+use crate::llm_playground::components::{FunctionToolEditor, VisualFunctionToolEditor};
 
 #[derive(Properties, PartialEq)]
 pub struct SettingsPanelProps {
@@ -15,6 +15,7 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
     let config = use_state(|| props.config.clone());
     let show_function_editor = use_state(|| false);
     let editing_function_index = use_state(|| None::<usize>);
+    let use_visual_editor = use_state(|| true); // Default to visual editor
 
     // Update local state when props change
     {
@@ -400,7 +401,31 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
                 
                 // Function Tools
                 <div>
-                    <h3 class="font-medium mb-2">{"Function Tools"}</h3>
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="font-medium">{"Function Tools"}</h3>
+                        <div class="flex items-center space-x-2">
+                            <span class="text-sm text-gray-600 dark:text-gray-300">{"Editor:"}</span>
+                            <button 
+                                onclick={
+                                    let use_visual_editor = use_visual_editor.clone();
+                                    Callback::from(move |_| {
+                                        use_visual_editor.set(!*use_visual_editor);
+                                    })
+                                }
+                                class={classes!(
+                                    "px-3", "py-1", "text-xs", "rounded-md", "transition-colors",
+                                    if *use_visual_editor {
+                                        "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                                    } else {
+                                        "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300"
+                                    }
+                                )}
+                                title="Toggle between visual form editor and JSON editor"
+                            >
+                                {if *use_visual_editor { "📝 Visual" } else { "⚡ JSON" }}
+                            </button>
+                        </div>
+                    </div>
                     {for config.function_tools.iter().enumerate().map(|(index, tool)| {
                         let edit_callback = edit_function_tool.clone();
                         let delete_callback = delete_function_tool.clone();
@@ -488,12 +513,22 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
                     None
                 };
                 
-                html! {
-                    <FunctionToolEditor
-                        tool={editing_tool}
-                        on_save={save_function_tool}
-                        on_cancel={cancel_function_editor}
-                    />
+                if *use_visual_editor {
+                    html! {
+                        <VisualFunctionToolEditor
+                            tool={editing_tool}
+                            on_save={save_function_tool}
+                            on_cancel={cancel_function_editor}
+                        />
+                    }
+                } else {
+                    html! {
+                        <FunctionToolEditor
+                            tool={editing_tool}
+                            on_save={save_function_tool}
+                            on_cancel={cancel_function_editor}
+                        />
+                    }
                 }
             } else {
                 html! {}

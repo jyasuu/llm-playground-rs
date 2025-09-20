@@ -7,6 +7,7 @@ pub mod input_bar;
 pub mod settings_panel;
 pub mod message_bubble;
 pub mod function_tool_editor;
+pub mod visual_function_tool_editor;
 
 pub use sidebar::Sidebar;
 pub use chat_header::ChatHeader;
@@ -16,3 +17,4 @@ pub use input_bar::InputBar;
 pub use settings_panel::SettingsPanel;
 pub use message_bubble::MessageBubble;
 pub use function_tool_editor::FunctionToolEditor;
+pub use visual_function_tool_editor::VisualFunctionToolEditor;
