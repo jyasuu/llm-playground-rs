@@ -35,3 +35,16 @@ serde_json = "1.0.140"
 reqwest = { version = "0.12.19", features = ["json"] }
 getrandom = { version = "0.2", features = ["js"] }
 pulldown-cmark = "0.12.0"
+anyhow = "1.0"
+futures = "0.3"
+tracing = "0.1"
+tracing-wasm = "0.2"
+rmcp = { version = "0.6.4", features = [
+    "client",
+    "transport-sse-client-reqwest",
+    "reqwest",
+    "transport-streamable-http-client-reqwest",
+    "transport-child-process",
+    "tower",
+    "auth"
+] }

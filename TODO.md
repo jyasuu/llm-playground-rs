@@ -1,13 +1,9 @@
-# complete function call configuration features
+# help me implement mcp sse client to access mcp sse server as function call tools
 
-1. add,edit,delete function call tools
+## reference sse mcp server client
+git clone https://github.com/modelcontextprotocol/rust-sdk.git
+## rust-sdk/examples/clients/src/sse.rs
 
 ## read @README.md first for know purpose
 
 ### you can help me management todo items in @README.md
-
-## some modify
-
-1. also display llm function call parameters in chatroom with other information
-2. session delete
-3. fix user message not stored in session or because some unknown reason covered by new session set after llm response

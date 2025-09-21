@@ -1,5 +1,6 @@
 // Type definitions for LLM Playground
 use serde::{Deserialize, Serialize};
+use crate::llm_playground::api_clients::McpConfig;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum ApiProvider {
@@ -11,6 +12,7 @@ pub enum ApiProvider {
 pub struct ApiConfig {
     pub gemini: GeminiConfig,
     pub openai: OpenAIConfig,
+    pub mcp: McpConfig,
     pub current_provider: ApiProvider,
     pub shared_settings: SharedSettings,
     pub system_prompt: String,
@@ -92,6 +94,7 @@ impl Default for ApiConfig {
                 api_key: String::new(),
                 model: "gpt-4o".to_string(),
             },
+            mcp: McpConfig::default(),
             current_provider: ApiProvider::Gemini,
             shared_settings: SharedSettings {
                 temperature: 0.7,

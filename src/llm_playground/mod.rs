@@ -14,7 +14,7 @@ use web_sys::HtmlTextAreaElement;
 use gloo_storage::{LocalStorage, Storage};
 use std::collections::HashMap;
 use gloo_console::log;
-use crate::llm_playground::api_clients::{GeminiClient, OpenAIClient};
+use crate::llm_playground::api_clients::{GeminiClient, OpenAIClient, McpClient};
 
 #[function_component(LLMPlayground)]
 pub fn llm_playground() -> Html {
@@ -26,6 +26,7 @@ pub fn llm_playground() -> Html {
     let dark_mode = use_state(|| false);
     let current_message = use_state(|| String::new());
     let is_loading = use_state(|| false);
+    let mcp_client = use_state(|| Option::<McpClient>::None);
 
     // Load data from localStorage on mount
     {
@@ -51,6 +52,32 @@ pub fn llm_playground() -> Html {
                     current_session_id.set(Some(stored_session_id));
                 }
 
+                || ()
+            },
+        );
+    }
+
+    // Initialize MCP client when config changes
+    {
+        let mcp_client = mcp_client.clone();
+        let api_config_clone = api_config.clone();
+        
+        use_effect_with(
+            (*api_config).mcp.clone(),
+            move |mcp_config| {
+                if mcp_config.enabled {
+                    log!("Initializing MCP client with config:", format!("{:?}", mcp_config));
+                    let client = McpClient::new(mcp_config.clone());
+                    mcp_client.set(Some(client));
+                    
+                    // Note: In a real implementation, you might want to trigger
+                    // the connection here, but for WASM compatibility we're keeping
+                    // it simple for now
+                } else {
+                    log!("MCP disabled, clearing client");
+                    mcp_client.set(None);
+                }
+                
                 || ()
             },
         );

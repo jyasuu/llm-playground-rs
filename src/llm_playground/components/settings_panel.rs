@@ -1,6 +1,6 @@
 use yew::prelude::*;
 use web_sys::HtmlInputElement;
-use crate::llm_playground::{ApiConfig, ApiProvider, GeminiConfig, OpenAIConfig, SharedSettings, FunctionTool};
+use crate::llm_playground::{ApiConfig, ApiProvider, FunctionTool, McpConfig};
 use crate::llm_playground::components::{FunctionToolEditor, VisualFunctionToolEditor};
 
 #[derive(Properties, PartialEq)]
@@ -108,6 +108,47 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
             let input: HtmlInputElement = e.target_unchecked_into();
             let mut new_config = (*config).clone();
             new_config.openai.model = input.value();
+            config.set(new_config);
+        })
+    };
+
+    // MCP config changes
+    let on_mcp_enabled_change = {
+        let config = config.clone();
+        Callback::from(move |e: Event| {
+            let input: HtmlInputElement = e.target_unchecked_into();
+            let mut new_config = (*config).clone();
+            new_config.mcp.enabled = input.checked();
+            config.set(new_config);
+        })
+    };
+
+    let on_mcp_url_change = {
+        let config = config.clone();
+        Callback::from(move |e: InputEvent| {
+            let input: HtmlInputElement = e.target_unchecked_into();
+            let mut new_config = (*config).clone();
+            new_config.mcp.server_url = input.value();
+            config.set(new_config);
+        })
+    };
+
+    let on_mcp_client_name_change = {
+        let config = config.clone();
+        Callback::from(move |e: InputEvent| {
+            let input: HtmlInputElement = e.target_unchecked_into();
+            let mut new_config = (*config).clone();
+            new_config.mcp.client_name = input.value();
+            config.set(new_config);
+        })
+    };
+
+    let on_mcp_client_version_change = {
+        let config = config.clone();
+        Callback::from(move |e: InputEvent| {
+            let input: HtmlInputElement = e.target_unchecked_into();
+            let mut new_config = (*config).clone();
+            new_config.mcp.client_version = input.value();
             config.set(new_config);
         })
     };
@@ -346,6 +387,77 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
                 } else {
                     html! {}
                 }}
+                
+                // MCP Server Configuration
+                <div>
+                    <h3 class="font-medium mb-2">{"MCP Server Configuration"}</h3>
+                    <div class="space-y-4">
+                        <div class="flex items-center">
+                            <input 
+                                type="checkbox" 
+                                id="mcp-enabled" 
+                                checked={config.mcp.enabled}
+                                onchange={on_mcp_enabled_change}
+                                class="mr-2" 
+                            />
+                            <label for="mcp-enabled">{"Enable MCP Server Connection"}</label>
+                        </div>
+                        
+                        {if config.mcp.enabled {
+                            html! {
+                                <div class="space-y-4">
+                                    <div>
+                                        <label class="block text-sm font-medium mb-1" for="mcp-url">{"Server URL"}</label>
+                                        <input 
+                                            type="text" 
+                                            id="mcp-url" 
+                                            value={config.mcp.server_url.clone()}
+                                            oninput={on_mcp_url_change}
+                                            class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700" 
+                                            placeholder="http://localhost:8000/sse"
+                                        />
+                                        <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                            {"URL of the MCP SSE server to connect to"}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium mb-1" for="mcp-client-name">{"Client Name"}</label>
+                                        <input 
+                                            type="text" 
+                                            id="mcp-client-name" 
+                                            value={config.mcp.client_name.clone()}
+                                            oninput={on_mcp_client_name_change}
+                                            class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700" 
+                                            placeholder="LLM Playground"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium mb-1" for="mcp-client-version">{"Client Version"}</label>
+                                        <input 
+                                            type="text" 
+                                            id="mcp-client-version" 
+                                            value={config.mcp.client_version.clone()}
+                                            oninput={on_mcp_client_version_change}
+                                            class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700" 
+                                            placeholder="0.1.0"
+                                        />
+                                    </div>
+                                    <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md p-3">
+                                        <div class="flex items-start">
+                                            <i class="fas fa-info-circle text-blue-500 mr-2 mt-0.5"></i>
+                                            <div class="text-sm text-blue-700 dark:text-blue-300">
+                                                <p class="font-medium mb-1">{"MCP Server Integration"}</p>
+                                                <p>{"When enabled, tools from the connected MCP server will be available as function calls in your chat sessions. Make sure your MCP server is running and accessible."}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        } else {
+                            html! {}
+                        }}
+                    </div>
+                </div>
                 
                 // General Settings
                 <div>
