@@ -276,44 +276,157 @@ pub fn flexible_llm_playground() -> Html {
                 
                 wasm_bindgen_futures::spawn_local(async move {
                     if let Some(session) = new_sessions.get(&session_id_clone) {
-                        let messages = &session.messages;
+                        let mut current_messages = session.messages.clone();
                         
-                        match client.send_message(messages, &config).await {
-                            Ok(response) => {
+                        // Add system message if exists
+                        if !config.system_prompt.trim().is_empty() {
+                            current_messages.insert(0, Message {
+                                id: "system".to_string(),
+                                role: MessageRole::System,
+                                content: config.system_prompt.clone(),
+                                timestamp: js_sys::Date::now(),
+                                function_call: None,
+                                function_response: None,
+                            });
+                        }
+                        
+                        // Handle function calls automatically with feedback loop
+                        let mut final_response = String::new();
+                        let mut max_iterations = 5; // Prevent infinite loops
+                        
+                        loop {
+                            match client.send_message(&current_messages, &config).await {
+                                Ok(response) => {
+                                    // Add any text content to final response
+                                    if let Some(content) = &response.content {
+                                        if !final_response.is_empty() {
+                                            final_response.push_str("\n\n");
+                                        }
+                                        final_response.push_str(content);
+                                    }
+                                    
+                                    // If no function calls, we're done
+                                    if response.function_calls.is_empty() {
+                                        break;
+                                    }
+                                    
+                                    // Process function calls
+                                    if !final_response.is_empty() {
+                                        final_response.push_str("\n\n");
+                                    }
+                                    
+                                    // Add assistant message with function calls to conversation
+                                    let assistant_message = Message {
+                                        id: format!("msg_fc_{}", js_sys::Date::now() as u64),
+                                        role: MessageRole::Assistant,
+                                        content: response.content.unwrap_or_default(),
+                                        timestamp: js_sys::Date::now(),
+                                        function_call: if let Some(fc) = response.function_calls.first() {
+                                            Some(serde_json::json!({
+                                                "name": fc.name,
+                                                "args": fc.arguments
+                                            }))
+                                        } else { None },
+                                        function_response: None,
+                                    };
+                                    current_messages.push(assistant_message.clone());
+                                    
+                                    // Save assistant function call message to session immediately for display
+                                    {
+                                        if let Some(session) = new_sessions.get_mut(&session_id_clone) {
+                                            session.messages.push(assistant_message);
+                                            session.updated_at = js_sys::Date::now();
+                                        }
+                                    }
+                                    
+                                    // Execute each function call and add responses
+                                    for function_call in &response.function_calls {
+                                        // Find mock response from config
+                                        let mock_response = config
+                                            .function_tools
+                                            .iter()
+                                            .find(|tool| tool.name == function_call.name)
+                                            .map(|tool| tool.mock_response.clone())
+                                            .unwrap_or_else(|| r#"{"result": "Function executed successfully"}"#.to_string());
+                                        
+                                        // Parse mock response as JSON
+                                        let response_value = serde_json::from_str(&mock_response)
+                                            .unwrap_or_else(|_| serde_json::json!({"result": mock_response}));
+                                        
+                                        // Add function response message to conversation
+                                        let function_response_message = Message {
+                                            id: format!("msg_fr_{}", js_sys::Date::now() as u64),
+                                            role: MessageRole::Function,
+                                            content: format!("Function {} executed", function_call.name),
+                                            timestamp: js_sys::Date::now(),
+                                            function_call: None,
+                                            function_response: Some(serde_json::json!({
+                                                "id": function_call.id,
+                                                "name": function_call.name,
+                                                "response": response_value
+                                            })),
+                                        };
+                                        current_messages.push(function_response_message.clone());
+                                        
+                                        // Save function response message to session immediately for display
+                                        {
+                                            if let Some(session) = new_sessions.get_mut(&session_id_clone) {
+                                                session.messages.push(function_response_message);
+                                                session.updated_at = js_sys::Date::now();
+                                            }
+                                        }
+                                        
+                                        // Add to display (keeping for final response text)
+                                        final_response.push_str(&format!(
+                                            "🔧 **Function**: `{}` → {}",
+                                            function_call.name,
+                                            serde_json::to_string(&response_value).unwrap_or_else(|_| "Invalid response".to_string())
+                                        ));
+                                        if function_call != response.function_calls.last().unwrap() {
+                                            final_response.push_str("\n");
+                                        }
+                                    }
+                                    
+                                    // Check iteration limit
+                                    max_iterations -= 1;
+                                    if max_iterations <= 0 {
+                                        final_response.push_str("\n\n⚠️ Maximum function call iterations reached");
+                                        break;
+                                    }
+                                },
+                                Err(error) => {
+                                    log!("API error:", &error);
+                                    if final_response.is_empty() {
+                                        final_response = format!("❌ **API Error**: {}", error);
+                                    } else {
+                                        final_response.push_str(&format!("\n\n❌ **API Error**: {}", error));
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        // Add final assistant response to session only if it has content
+                        if !final_response.trim().is_empty() {
+                            if let Some(session) = new_sessions.get_mut(&session_id_clone) {
                                 let assistant_message = Message {
                                     id: format!("assistant_{}", js_sys::Date::now() as u64),
                                     role: MessageRole::Assistant,
-                                    content: response.content.unwrap_or_default(),
+                                    content: final_response,
                                     timestamp: js_sys::Date::now(),
                                     function_call: None,
                                     function_response: None,
                                 };
                                 
-                                if let Some(session) = new_sessions.get_mut(&session_id_clone) {
-                                    session.messages.push(assistant_message);
-                                    session.updated_at = js_sys::Date::now();
-                                }
-                                sessions.set(new_sessions);
-                            }
-                            Err(error) => {
-                                log!("Error sending message:", &error);
-                                let error_message = Message {
-                                    id: format!("error_{}", js_sys::Date::now() as u64),
-                                    role: MessageRole::Assistant,
-                                    content: format!("Error: {}", error),
-                                    timestamp: js_sys::Date::now(),
-                                    function_call: None,
-                                    function_response: None,
-                                };
-                                
-                                if let Some(session) = new_sessions.get_mut(&session_id_clone) {
-                                    session.messages.push(error_message);
-                                    session.updated_at = js_sys::Date::now();
-                                }
-                                sessions.set(new_sessions);
+                                session.messages.push(assistant_message);
+                                session.updated_at = js_sys::Date::now();
                             }
                         }
+                        
                         is_loading_clone.set(false);
+                        
+                        // Set state after mutations
+                        sessions.set(new_sessions.clone());
                     }
                 });
             }
