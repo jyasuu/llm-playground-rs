@@ -1,22 +1,25 @@
 use yew::prelude::*;
 use web_sys::HtmlInputElement;
-use crate::llm_playground::{ApiConfig, ApiProvider, GeminiConfig, OpenAIConfig};
-use crate::llm_playground::types::{SharedSettings, FunctionTool};
+use wasm_bindgen::JsCast;
+use crate::llm_playground::provider_config::{FlexibleApiConfig, ProviderConfig};
+use crate::llm_playground::types::FunctionTool;
 use crate::llm_playground::components::{FunctionToolEditor, VisualFunctionToolEditor};
 
 #[derive(Properties, PartialEq)]
-pub struct SettingsPanelProps {
-    pub config: ApiConfig,
-    pub on_save: Callback<ApiConfig>,
+pub struct FlexibleSettingsPanelProps {
+    pub config: FlexibleApiConfig,
+    pub on_save: Callback<FlexibleApiConfig>,
     pub on_close: Callback<()>,
 }
 
-#[function_component(SettingsPanel)]
-pub fn settings_panel(props: &SettingsPanelProps) -> Html {
+#[function_component(FlexibleSettingsPanel)]
+pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
     let config = use_state(|| props.config.clone());
     let show_function_editor = use_state(|| false);
     let editing_function_index = use_state(|| None::<usize>);
-    let use_visual_editor = use_state(|| true); // Default to visual editor
+    let use_visual_editor = use_state(|| true);
+    let selected_provider_index = use_state(|| 0);
+    let show_add_provider = use_state(|| false);
 
     // Update local state when props change
     {
@@ -46,70 +49,93 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
         })
     };
 
-    // API Provider change
-    let on_provider_change = {
-        let config = config.clone();
+    // Provider management
+    let on_provider_select = {
+        let selected_provider_index = selected_provider_index.clone();
         Callback::from(move |e: Event| {
             let input: HtmlInputElement = e.target_unchecked_into();
-            let mut new_config = (*config).clone();
-            new_config.current_provider = match input.value().as_str() {
-                "gemini" => ApiProvider::Gemini,
-                "openai" => ApiProvider::OpenAI,
-                _ => ApiProvider::Gemini,
-            };
-            config.set(new_config);
+            if let Ok(index) = input.value().parse::<usize>() {
+                selected_provider_index.set(index);
+            }
         })
     };
 
-    // Gemini config changes
-    let on_gemini_key_change = {
+    let on_provider_field_change = {
         let config = config.clone();
-        Callback::from(move |e: InputEvent| {
-            let input: HtmlInputElement = e.target_unchecked_into();
+        let selected_provider_index = selected_provider_index.clone();
+        Callback::from(move |(field, value): (String, String)| {
             let mut new_config = (*config).clone();
-            new_config.gemini.api_key = input.value();
-            config.set(new_config);
+            let index = *selected_provider_index;
+            if index < new_config.providers.len() {
+                match field.as_str() {
+                    "name" => new_config.providers[index].name = value,
+                    "api_base_url" => new_config.providers[index].api_base_url = value,
+                    "api_key" => new_config.providers[index].api_key = value,
+                    _ => {}
+                }
+                config.set(new_config);
+            }
         })
     };
 
-    let on_gemini_model_change = {
+    let on_add_model = {
         let config = config.clone();
-        Callback::from(move |e: Event| {
-            let input: HtmlInputElement = e.target_unchecked_into();
-            let mut new_config = (*config).clone();
-            new_config.gemini.model = input.value();
-            config.set(new_config);
+        let selected_provider_index = selected_provider_index.clone();
+        Callback::from(move |model: String| {
+            if !model.trim().is_empty() {
+                let mut new_config = (*config).clone();
+                let index = *selected_provider_index;
+                if index < new_config.providers.len() {
+                    new_config.providers[index].models.push(model.trim().to_string());
+                    config.set(new_config);
+                }
+            }
         })
     };
 
-    // OpenAI config changes
-    let on_openai_url_change = {
+    let on_remove_model = {
         let config = config.clone();
-        Callback::from(move |e: InputEvent| {
-            let input: HtmlInputElement = e.target_unchecked_into();
+        let selected_provider_index = selected_provider_index.clone();
+        Callback::from(move |model_index: usize| {
             let mut new_config = (*config).clone();
-            new_config.openai.base_url = input.value();
-            config.set(new_config);
+            let provider_index = *selected_provider_index;
+            if provider_index < new_config.providers.len() && model_index < new_config.providers[provider_index].models.len() {
+                new_config.providers[provider_index].models.remove(model_index);
+                config.set(new_config);
+            }
         })
     };
 
-    let on_openai_key_change = {
+    let on_add_provider = {
         let config = config.clone();
-        Callback::from(move |e: InputEvent| {
-            let input: HtmlInputElement = e.target_unchecked_into();
+        let show_add_provider = show_add_provider.clone();
+        Callback::from(move |_: MouseEvent| {
             let mut new_config = (*config).clone();
-            new_config.openai.api_key = input.value();
+            new_config.providers.push(ProviderConfig {
+                name: "new-provider".to_string(),
+                api_base_url: "https://api.example.com/v1/chat/completions".to_string(),
+                api_key: String::new(),
+                models: vec!["model-1".to_string()],
+                transformer: crate::llm_playground::provider_config::TransformerConfig {
+                    r#use: vec!["openai".to_string()],
+                },
+            });
             config.set(new_config);
+            show_add_provider.set(false);
         })
     };
 
-    let on_openai_model_change = {
+    let on_remove_provider = {
         let config = config.clone();
-        Callback::from(move |e: Event| {
-            let input: HtmlInputElement = e.target_unchecked_into();
+        let selected_provider_index = selected_provider_index.clone();
+        Callback::from(move |_| {
             let mut new_config = (*config).clone();
-            new_config.openai.model = input.value();
-            config.set(new_config);
+            let index = *selected_provider_index;
+            if index < new_config.providers.len() && new_config.providers.len() > 1 {
+                new_config.providers.remove(index);
+                selected_provider_index.set(0);
+                config.set(new_config);
+            }
         })
     };
 
@@ -160,11 +186,11 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
         })
     };
 
-    // Function tool management callbacks
+    // Function tool management callbacks (same as before)
     let add_function_tool = {
         let show_function_editor = show_function_editor.clone();
         let editing_function_index = editing_function_index.clone();
-        Callback::from(move |_| {
+        Callback::from(move |_: MouseEvent| {
             editing_function_index.set(None);
             show_function_editor.set(true);
         })
@@ -198,12 +224,10 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
             let mut new_config = (*config).clone();
             
             if let Some(index) = *editing_function_index {
-                // Edit existing tool
                 if index < new_config.function_tools.len() {
                     new_config.function_tools[index] = tool;
                 }
             } else {
-                // Add new tool
                 new_config.function_tools.push(tool);
             }
             
@@ -216,11 +240,13 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
     let cancel_function_editor = {
         let show_function_editor = show_function_editor.clone();
         let editing_function_index = editing_function_index.clone();
-        Callback::from(move |_| {
+        Callback::from(move |_: ()| {
             show_function_editor.set(false);
             editing_function_index.set(None);
         })
     };
+
+    let current_provider = config.providers.get(*selected_provider_index);
 
     html! {
         <div class="absolute inset-y-0 right-0 w-96 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 overflow-y-auto custom-scrollbar z-50">
@@ -237,118 +263,189 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
             </div>
             
             <div class="p-4 space-y-6">
-                // API Selection
+                // Provider Management
                 <div>
-                    <h3 class="font-medium mb-2">{"API Configuration"}</h3>
-                    <div class="space-y-4">
-                        <div class="flex items-center">
-                            <input 
-                                type="radio" 
-                                id="gemini-api" 
-                                name="api-type" 
-                                value="gemini"
-                                checked={config.current_provider == ApiProvider::Gemini}
-                                onchange={on_provider_change.clone()}
-                                class="mr-2" 
-                            />
-                            <label for="gemini-api">{"Gemini API"}</label>
-                        </div>
-                        <div class="flex items-center">
-                            <input 
-                                type="radio" 
-                                id="openai-api" 
-                                name="api-type" 
-                                value="openai"
-                                checked={config.current_provider == ApiProvider::OpenAI}
-                                onchange={on_provider_change}
-                                class="mr-2"
-                            />
-                            <label for="openai-api">{"OpenAI-compatible API"}</label>
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="font-medium">{"LLM Providers"}</h3>
+                        <div class="flex space-x-2">
+                            <button 
+                                onclick={
+                                    let show_add_provider = show_add_provider.clone();
+                                    Callback::from(move |_| show_add_provider.set(true))
+                                }
+                                class="text-xs px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded hover:bg-green-200 dark:hover:bg-green-900/50"
+                            >
+                                <i class="fas fa-plus mr-1"></i>{"Add"}
+                            </button>
+                            {if config.providers.len() > 1 {
+                                html! {
+                                    <button 
+                                        onclick={on_remove_provider}
+                                        class="text-xs px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded hover:bg-red-200 dark:hover:bg-red-900/50"
+                                    >
+                                        <i class="fas fa-trash mr-1"></i>{"Remove"}
+                                    </button>
+                                }
+                            } else {
+                                html! {}
+                            }}
                         </div>
                     </div>
+                    
+                    // Provider selector
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium mb-1">{"Select Provider"}</label>
+                        <select 
+                            value={selected_provider_index.to_string()}
+                            onchange={on_provider_select}
+                            class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700"
+                        >
+                            {for config.providers.iter().enumerate().map(|(index, provider)| {
+                                html! {
+                                    <option key={index} value={index.to_string()}>
+                                        {&provider.name}
+                                    </option>
+                                }
+                            })}
+                        </select>
+                    </div>
+
+                    // Provider configuration
+                    {if let Some(provider) = current_provider {
+                        html! {
+                            <div class="space-y-4 p-4 border border-gray-200 dark:border-gray-600 rounded-md">
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">{"Provider Name"}</label>
+                                    <input 
+                                        type="text" 
+                                        value={provider.name.clone()}
+                                        oninput={
+                                            let callback = on_provider_field_change.clone();
+                                            Callback::from(move |e: InputEvent| {
+                                                let input: HtmlInputElement = e.target_unchecked_into();
+                                                callback.emit(("name".to_string(), input.value()));
+                                            })
+                                        }
+                                        class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700"
+                                    />
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">{"API Base URL"}</label>
+                                    <input 
+                                        type="text" 
+                                        value={provider.api_base_url.clone()}
+                                        oninput={
+                                            let callback = on_provider_field_change.clone();
+                                            Callback::from(move |e: InputEvent| {
+                                                let input: HtmlInputElement = e.target_unchecked_into();
+                                                callback.emit(("api_base_url".to_string(), input.value()));
+                                            })
+                                        }
+                                        class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700"
+                                        placeholder="https://api.example.com/v1/chat/completions"
+                                    />
+                                </div>
+                                
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">{"API Key"}</label>
+                                    <input 
+                                        type="password" 
+                                        value={provider.api_key.clone()}
+                                        oninput={
+                                            let callback = on_provider_field_change.clone();
+                                            Callback::from(move |e: InputEvent| {
+                                                let input: HtmlInputElement = e.target_unchecked_into();
+                                                callback.emit(("api_key".to_string(), input.value()));
+                                            })
+                                        }
+                                        class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700"
+                                        placeholder="Enter API key"
+                                    />
+                                </div>
+                                
+                                // Transformer type
+                                <div>
+                                    <label class="block text-sm font-medium mb-1">{"API Type"}</label>
+                                    <div class="text-sm text-gray-600 dark:text-gray-300">
+                                        {format!("Uses: {}", provider.transformer.r#use.join(", "))}
+                                    </div>
+                                </div>
+                                
+                                // Models management
+                                <div>
+                                    <label class="block text-sm font-medium mb-2">{"Available Models"}</label>
+                                    <div class="space-y-2">
+                                        {for provider.models.iter().enumerate().map(|(model_index, model)| {
+                                            let remove_callback = on_remove_model.clone();
+                                            html! {
+                                                <div key={model_index} class="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-600 rounded">
+                                                    <span class="text-sm">{model}</span>
+                                                    <button 
+                                                        onclick={
+                                                            Callback::from(move |_| remove_callback.emit(model_index))
+                                                        }
+                                                        class="text-xs px-1 py-0.5 text-red-600 hover:text-red-800"
+                                                    >
+                                                        <i class="fas fa-times"></i>
+                                                    </button>
+                                                </div>
+                                            }
+                                        })}
+                                        
+                                        // Add model input
+                                        <div class="flex space-x-2">
+                                            <input 
+                                                type="text" 
+                                                id={format!("new-model-{}", *selected_provider_index)}
+                                                class="flex-1 p-2 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
+                                                placeholder="Add new model..."
+                                                onkeypress={
+                                                    let add_callback = on_add_model.clone();
+                                                    Callback::from(move |e: KeyboardEvent| {
+                                                        if e.key() == "Enter" {
+                                                            let input: HtmlInputElement = e.target_unchecked_into();
+                                                            let value = input.value();
+                                                            if !value.trim().is_empty() {
+                                                                add_callback.emit(value);
+                                                                input.set_value("");
+                                                            }
+                                                        }
+                                                    })
+                                                }
+                                            />
+                                            <button 
+                                                onclick={
+                                                    let add_callback = on_add_model.clone();
+                                                    let selected_index = *selected_provider_index;
+                                                    Callback::from(move |_| {
+                                                        if let Some(input) = web_sys::window()
+                                                            .and_then(|w| w.document())
+                                                            .and_then(|d| d.get_element_by_id(&format!("new-model-{}", selected_index)))
+                                                            .and_then(|e| e.dyn_into::<HtmlInputElement>().ok()) {
+                                                            let value = input.value();
+                                                            if !value.trim().is_empty() {
+                                                                add_callback.emit(value);
+                                                                input.set_value("");
+                                                            }
+                                                        }
+                                                    })
+                                                }
+                                                class="px-3 py-2 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
+                                            >
+                                                <i class="fas fa-plus"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    } else {
+                        html! {}
+                    }}
                 </div>
                 
-                // Gemini Config
-                {if config.current_provider == ApiProvider::Gemini {
-                    html! {
-                        <div>
-                            <div class="mb-4">
-                                <label class="block text-sm font-medium mb-1" for="gemini-key">{"API Key"}</label>
-                                <input 
-                                    type="password" 
-                                    id="gemini-key" 
-                                    value={config.gemini.api_key.clone()}
-                                    oninput={on_gemini_key_change}
-                                    class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700" 
-                                    placeholder="Enter your Gemini API key"
-                                />
-                            </div>
-                            <div class="mb-4">
-                                <label class="block text-sm font-medium mb-1" for="gemini-model">{"Model"}</label>
-                                <select 
-                                    id="gemini-model" 
-                                    value={config.gemini.model.clone()}
-                                    onchange={on_gemini_model_change}
-                                    class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700"
-                                >
-                                    <option value="gemini-2.5-flash-lite-preview-06-17">{"Gemini 2.5 Flash (Experimental)"}</option>
-                                    <option value="gemini-1.5-pro">{"Gemini 1.5 Pro"}</option>
-                                    <option value="gemini-1.5-flash">{"Gemini 1.5 Flash"}</option>
-                                    <option value="gemini-1.0-pro">{"Gemini 1.0 Pro"}</option>
-                                </select>
-                            </div>
-                        </div>
-                    }
-                } else {
-                    html! {}
-                }}
-                
-                // OpenAI Config
-                {if config.current_provider == ApiProvider::OpenAI {
-                    html! {
-                        <div>
-                            <div class="mb-4">
-                                <label class="block text-sm font-medium mb-1" for="openai-url">{"API URL"}</label>
-                                <input 
-                                    type="text" 
-                                    id="openai-url" 
-                                    value={config.openai.base_url.clone()}
-                                    oninput={on_openai_url_change}
-                                    class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700" 
-                                    placeholder="https://api.openai.com/v1"
-                                />
-                            </div>
-                            <div class="mb-4">
-                                <label class="block text-sm font-medium mb-1" for="openai-key">{"API Key"}</label>
-                                <input 
-                                    type="password" 
-                                    id="openai-key" 
-                                    value={config.openai.api_key.clone()}
-                                    oninput={on_openai_key_change}
-                                    class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700" 
-                                    placeholder="Enter your API key"
-                                />
-                            </div>
-                            <div class="mb-4">
-                                <label class="block text-sm font-medium mb-1" for="openai-model">{"Model"}</label>
-                                <select 
-                                    id="openai-model" 
-                                    value={config.openai.model.clone()}
-                                    onchange={on_openai_model_change}
-                                    class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700"
-                                >
-                                    <option value="gpt-4o">{"GPT-4o"}</option>
-                                    <option value="gpt-4-turbo">{"GPT-4 Turbo"}</option>
-                                    <option value="gpt-3.5-turbo">{"GPT-3.5 Turbo"}</option>
-                                </select>
-                            </div>
-                        </div>
-                    }
-                } else {
-                    html! {}
-                }}
-                
-                // General Settings
+                // General Settings (same as before)
                 <div>
                     <h3 class="font-medium mb-2">{"General Settings"}</h3>
                     <div class="mb-4">

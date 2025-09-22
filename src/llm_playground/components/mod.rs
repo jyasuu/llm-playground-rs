@@ -8,6 +8,8 @@ pub mod settings_panel;
 pub mod message_bubble;
 pub mod function_tool_editor;
 pub mod visual_function_tool_editor;
+pub mod flexible_settings_panel;
+pub mod model_selector;
 
 pub use sidebar::Sidebar;
 pub use chat_header::ChatHeader;
@@ -18,3 +20,5 @@ pub use settings_panel::SettingsPanel;
 pub use message_bubble::MessageBubble;
 pub use function_tool_editor::FunctionToolEditor;
 pub use visual_function_tool_editor::VisualFunctionToolEditor;
+pub use flexible_settings_panel::FlexibleSettingsPanel;
+pub use model_selector::ModelSelector;

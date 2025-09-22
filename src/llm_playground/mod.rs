@@ -3,11 +3,16 @@ pub mod components;
 pub mod storage;
 pub mod api_clients;
 pub mod types;
+pub mod provider_config;
+pub mod flexible_client;
+pub mod flexible_playground;
 
 pub use components::*;
 pub use storage::*;
 pub use api_clients::*;
 pub use types::*;
+pub use provider_config::{FlexibleApiConfig, ProviderConfig, TransformerConfig, RouterConfig};
+pub use flexible_playground::FlexibleLLMPlayground;
 
 use yew::prelude::*;
 use web_sys::HtmlTextAreaElement;
