@@ -2,6 +2,7 @@
 use crate::llm_playground::{Message, ApiConfig};
 use std::future::Future;
 use std::pin::Pin;
+use serde::{Deserialize, Serialize};
 
 // Stream callback type for handling streaming responses
 pub type StreamCallback = Box<dyn Fn(String, Option<serde_json::Value>) + 'static>;
@@ -58,7 +59,7 @@ pub trait ConversationManager {
     fn get_conversation_history(&self) -> &[ConversationMessage];
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ConversationMessage {
     pub role: String,
     pub content: String,

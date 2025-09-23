@@ -1,11 +1,18 @@
 // OpenAI-compatible API client for WASM
-use crate::llm_playground::{Message, ApiConfig, MessageRole};
-use crate::llm_playground::api_clients::{LLMClient, ConversationManager, ConversationMessage, FunctionResponse, StreamCallback, FunctionCallRequest, LLMResponse};
+use crate::llm_playground::api_clients::{
+    ConversationManager, ConversationMessage, FunctionCallRequest, FunctionResponse, LLMClient,
+    LLMResponse, StreamCallback,
+};
+use crate::llm_playground::{ApiConfig, Message, MessageRole};
+use gloo_console::log;
 use gloo_net::http::Request;
 use serde::{Deserialize, Serialize};
-use gloo_console::log;
 use std::future::Future;
 use std::pin::Pin;
+use wasm_bindgen_futures::JsFuture;
+use wasm_bindgen::JsValue;
+use js_sys::Promise;
+use web_sys;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct OpenAIRequest {
@@ -13,9 +20,13 @@ struct OpenAIRequest {
     messages: Vec<OpenAIMessage>,
     temperature: f32,
     max_tokens: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tools: Option<Vec<serde_json::Value>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tool_choice: Option<String>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 struct OpenAIMessage {
     role: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -42,12 +53,12 @@ struct FunctionCall {
     pub arguments: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 struct OpenAIResponse {
     choices: Vec<Choice>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 struct Choice {
     message: OpenAIMessage,
 }
@@ -63,6 +74,18 @@ impl OpenAIClient {
             conversation_history: Vec::new(),
             system_prompt: None,
         }
+    }
+    
+    // Helper function to sleep for a specified duration
+    async fn sleep(ms: i32) {
+        let promise = Promise::new(&mut |resolve, _| {
+            let window = web_sys::window().unwrap();
+            let _ = window.set_timeout_with_callback_and_timeout_and_arguments_0(
+                &resolve,
+                ms,
+            );
+        });
+        let _ = JsFuture::from(promise).await;
     }
 
     fn convert_messages_to_openai(&self, messages: &[Message]) -> Vec<OpenAIMessage> {
@@ -81,41 +104,96 @@ impl OpenAIClient {
 
         // Add conversation history
         for conv_msg in &self.conversation_history {
-            if !conv_msg.content.is_empty() || conv_msg.function_call.is_some() || conv_msg.function_response.is_some() {
+
+            log!("conv_msg_json");
+            let conv_msg_json = serde_json::json!(conv_msg.clone());
+            log!(conv_msg_json.to_string());
+
+
+            if !conv_msg.content.is_empty()
+                || conv_msg.function_call.is_some()
+                || conv_msg.function_response.is_some()
+            {
                 let role = match conv_msg.role.as_str() {
                     "user" => "user",
                     "assistant" | "model" => "assistant",
+                    "tool" => "tool",
                     _ => "user",
                 };
 
-                openai_messages.push(OpenAIMessage {
+                let mut openai_msg = OpenAIMessage {
                     role: role.to_string(),
-                    content: Some(conv_msg.content.clone()),
+                    content: if conv_msg.content.is_empty() && conv_msg.function_call.is_some() {
+                        None
+                    } else {
+                        Some(conv_msg.content.clone())
+                    },
                     name: None,
                     tool_calls: None,
                     tool_call_id: None,
-                });
+                };
 
-                // Handle function calls and responses
-                if let Some(_fc) = &conv_msg.function_call {
-                    // Function calls would be handled differently in a full implementation
-                    // For now, we'll include them as text content
+                // Handle function calls from assistant messages
+                if let Some(fc) = &conv_msg.function_call {
+                    if role == "assistant" {
+                        // Convert function call JSON to proper tool_calls format
+                        if let Ok(func_calls) = serde_json::from_value::<Vec<serde_json::Value>>(fc.clone()) {
+                            let mut tool_calls = Vec::new();
+                            for func_call in func_calls {
+                                if let (Some(id), Some(name), Some(args)) = (
+                                    func_call.get("id").and_then(|v| v.as_str()),
+                                    func_call.get("name").and_then(|v| v.as_str()),
+                                    func_call.get("arguments")
+                                ) {
+                                    tool_calls.push(ToolCall {
+                                        id: id.to_string(),
+                                        call_type: "function".to_string(),
+                                        function: FunctionCall {
+                                            name: name.to_string(),
+                                            arguments: serde_json::to_string(args).unwrap_or_default(),
+                                        },
+                                    });
+                                }
+                            }
+                            if !tool_calls.is_empty() {
+                                openai_msg.tool_calls = Some(tool_calls);
+                            }
+                        }
+                    }
                 }
 
+                // Handle function responses
                 if let Some(fr) = &conv_msg.function_response {
-                    openai_messages.push(OpenAIMessage {
-                        role: "tool".to_string(),
-                        content: Some(serde_json::to_string(fr).unwrap_or_default()),
-                        name: None,
-                        tool_calls: None,
-                        tool_call_id: None,
-                    });
+                    if role == "tool" {
+                        if let Some(call_id) = fr.get("id").and_then(|v| v.as_str()) {
+                            openai_msg.tool_call_id = Some(call_id.to_string());
+                        }
+                        if let Some(func_name) = fr.get("name").and_then(|v| v.as_str()) {
+                            openai_msg.name = Some(func_name.to_string());
+                        }
+                        if let Some(response_data) = fr.get("response") {
+                            openai_msg.content = Some(serde_json::to_string(response_data).unwrap_or_default());
+                        }
+                    }
                 }
+
+                log!("openai_msg_json");
+                let openai_msg_json = serde_json::json!(openai_msg.clone());
+                log!(openai_msg_json.to_string());
+
+
+                openai_messages.push(openai_msg);
             }
         }
 
         // Add new messages
         for message in messages {
+            
+            log!("message_json");
+            let message_json = serde_json::json!(message.clone());
+            log!(message_json.to_string());
+
+
             let role = match message.role {
                 MessageRole::System => {
                     if openai_messages.is_empty() || openai_messages[0].role != "system" {
@@ -131,7 +209,11 @@ impl OpenAIClient {
 
             let mut openai_msg = OpenAIMessage {
                 role: role.to_string(),
-                content: if message.content.is_empty() { None } else { Some(message.content.clone()) },
+                content: if message.content.is_empty() {
+                    None
+                } else {
+                    Some(message.content.clone())
+                },
                 name: None,
                 tool_calls: None,
                 tool_call_id: None,
@@ -149,10 +231,46 @@ impl OpenAIClient {
                     }
                     // Set content to the function response data
                     if let Some(response_data) = func_response.get("response") {
-                        openai_msg.content = Some(serde_json::to_string(response_data).unwrap_or_default());
+                        openai_msg.content =
+                            Some(serde_json::to_string(response_data).unwrap_or_default());
                     }
                 }
             }
+            
+            // Handle function calls from assistant messages
+            if message.role == MessageRole::Assistant {
+                if let Some(fc) = &message.function_call {
+                    // Convert function call JSON to proper tool_calls format
+                    if let Ok(func_calls) = serde_json::from_value::<Vec<serde_json::Value>>(fc.clone()) {
+                        let mut tool_calls = Vec::new();
+                        for func_call in func_calls {
+                            if let (Some(id), Some(name), Some(args)) = (
+                                func_call.get("id").and_then(|v| v.as_str()),
+                                func_call.get("name").and_then(|v| v.as_str()),
+                                func_call.get("arguments")
+                            ) {
+                                tool_calls.push(ToolCall {
+                                    id: id.to_string(),
+                                    call_type: "function".to_string(),
+                                    function: FunctionCall {
+                                        name: name.to_string(),
+                                        arguments: serde_json::to_string(args).unwrap_or_default(),
+                                    },
+                                });
+                            }
+                        }
+                        if !tool_calls.is_empty() {
+                            openai_msg.tool_calls = Some(tool_calls);
+                        }
+                    }
+                }
+            }
+
+            
+            log!("openai_msg_json");
+            let openai_msg_json = serde_json::json!(openai_msg.clone());
+            log!(openai_msg_json.to_string());
+
 
             openai_messages.push(openai_msg);
         }
@@ -189,7 +307,7 @@ impl OpenAIClient {
         config: &ApiConfig,
     ) -> Result<String, String> {
         log!("OpenAI API call started");
-        
+
         if config.openai.api_key.trim().is_empty() {
             return Err("Please configure your OpenAI API key in Settings".to_string());
         }
@@ -212,12 +330,20 @@ impl OpenAIClient {
 
         let response = Request::post(&url)
             .header("Content-Type", "application/json")
-            .header("Authorization", &format!("Bearer {}", config.openai.api_key))
+            .header(
+                "Authorization",
+                &format!("Bearer {}", config.openai.api_key),
+            )
             .json(&request_body)
-            .map_err(|e| format!("Failed to create request: {}", e))? 
+            .map_err(|e| format!("Failed to create request: {}", e))?
             .send()
             .await
-            .map_err(|e| format!("Network error - Check your internet connection and API key: {}", e))?;
+            .map_err(|e| {
+                format!(
+                    "Network error - Check your internet connection and API key: {}",
+                    e
+                )
+            })?;
 
         if !response.ok() {
             let status = response.status();
@@ -225,7 +351,7 @@ impl OpenAIClient {
                 .text()
                 .await
                 .unwrap_or_else(|_| "Unknown error".to_string());
-            
+
             let error_message = if status == 400 {
                 "Bad request to OpenAI API. Please check your model selection and message format."
             } else if status == 401 {
@@ -239,8 +365,11 @@ impl OpenAIClient {
             } else {
                 "OpenAI API error occurred. Please try again."
             };
-            
-            return Err(format!("{}\n\nDetailed error: {}", error_message, error_text));
+
+            return Err(format!(
+                "{}\n\nDetailed error: {}",
+                error_message, error_text
+            ));
         }
 
         let openai_response: OpenAIResponse = response
@@ -252,7 +381,11 @@ impl OpenAIClient {
             return Err("No response from OpenAI API".to_string());
         }
 
-        Ok(openai_response.choices[0].message.content.clone().unwrap_or_default())
+        Ok(openai_response.choices[0]
+            .message
+            .content
+            .clone()
+            .unwrap_or_default())
     }
 }
 
@@ -266,6 +399,10 @@ impl LLMClient for OpenAIClient {
         let messages_clone = messages.to_vec();
         let config_clone = config.clone();
 
+        log!("messages_json");
+        let messages_json = serde_json::json!(messages_clone.clone());
+        log!(messages_json.to_string());
+
         Box::pin(async move {
             // Use the full response parsing instead of just the internal method
             if config_clone.openai.api_key.trim().is_empty() {
@@ -273,29 +410,45 @@ impl LLMClient for OpenAIClient {
             }
 
             let openai_messages = self_clone.convert_messages_to_openai(&messages_clone);
+
+            log!("openai_messages_json");
+            let openai_messages_json = serde_json::json!(openai_messages.clone());
+            log!(openai_messages_json.to_string());
+
             let tools = self_clone.build_tools(&config_clone);
 
-            let mut request_body = serde_json::json!({
-                "model": config_clone.openai.model,
-                "messages": openai_messages,
-                "temperature": config_clone.shared_settings.temperature,
-                "max_tokens": config_clone.shared_settings.max_tokens,
-            });
-
-            if let Some(tools_array) = tools {
-                request_body["tools"] = serde_json::Value::Array(tools_array);
-            }
+            let request_body = OpenAIRequest {
+                model: config_clone.openai.model,
+                messages: openai_messages,
+                temperature: config_clone.shared_settings.temperature,
+                max_tokens: config_clone.shared_settings.max_tokens,
+                tools: tools.clone(),
+                tool_choice: if tools.is_some() { Some("auto".to_string()) } else { None },
+            };
 
             let url = format!("{}/chat/completions", config_clone.openai.base_url);
+            
+            // Add sleep/delay before sending the request (500ms)
+            log!("Sleeping for 500ms before sending OpenAI request...");
+            OpenAIClient::sleep(500).await;
+            log!("Sleep completed, sending request now");
 
             let response = Request::post(&url)
                 .header("Content-Type", "application/json")
-                .header("Authorization", &format!("Bearer {}", config_clone.openai.api_key))
+                .header(
+                    "Authorization",
+                    &format!("Bearer {}", config_clone.openai.api_key),
+                )
                 .json(&request_body)
-                .map_err(|e| format!("Failed to create request: {}", e))? 
+                .map_err(|e| format!("Failed to create request: {}", e))?
                 .send()
                 .await
-                .map_err(|e| format!("Network error - Check your internet connection and API key: {}", e))?;
+                .map_err(|e| {
+                    format!(
+                        "Network error - Check your internet connection and API key: {}",
+                        e
+                    )
+                })?;
 
             if !response.ok() {
                 let status = response.status();
@@ -303,7 +456,7 @@ impl LLMClient for OpenAIClient {
                     .text()
                     .await
                     .unwrap_or_else(|_| "Unknown error".to_string());
-                
+
                 let error_message = if status == 400 {
                     "Bad request to OpenAI API. Please check your model selection and message format."
                 } else if status == 401 {
@@ -317,8 +470,11 @@ impl LLMClient for OpenAIClient {
                 } else {
                     "OpenAI API error occurred. Please try again."
                 };
-                
-                return Err(format!("{}\n\nDetailed error: {}", error_message, error_text));
+
+                return Err(format!(
+                    "{}\n\nDetailed error: {}",
+                    error_message, error_text
+                ));
             }
 
             let openai_response: OpenAIResponse = response
@@ -326,16 +482,20 @@ impl LLMClient for OpenAIClient {
                 .await
                 .map_err(|e| format!("Failed to parse response: {}", e))?;
 
+            log!("response_json");
+            let response_json = serde_json::json!(openai_response.clone());
+            log!(response_json.to_string());
+
             if openai_response.choices.is_empty() {
                 return Err("No response from OpenAI API".to_string());
             }
 
             let choice = &openai_response.choices[0];
             let message = &choice.message;
-            
+
             // Extract content
             let content = message.content.clone();
-            
+
             // Extract function calls
             let mut function_calls = Vec::new();
             if let Some(tool_calls) = &message.tool_calls {
@@ -344,12 +504,14 @@ impl LLMClient for OpenAIClient {
                     let args = if tool_call.function.arguments.is_empty() {
                         serde_json::json!({})
                     } else {
-                        match serde_json::from_str::<serde_json::Value>(&tool_call.function.arguments) {
+                        match serde_json::from_str::<serde_json::Value>(
+                            &tool_call.function.arguments,
+                        ) {
                             Ok(parsed) => parsed,
                             Err(_) => serde_json::json!({}),
                         }
                     };
-                    
+
                     function_calls.push(FunctionCallRequest {
                         id: tool_call.id.clone(),
                         name: tool_call.function.name.clone(),
@@ -357,7 +519,7 @@ impl LLMClient for OpenAIClient {
                     });
                 }
             }
-            
+
             Ok(LLMResponse {
                 content,
                 function_calls,
@@ -395,31 +557,43 @@ impl LLMClient for OpenAIClient {
 
             if let Some(tools_array) = tools {
                 request_body["tools"] = serde_json::Value::Array(tools_array);
+                request_body["tool_choice"] = serde_json::Value::String("auto".to_string());
             }
 
             let url = format!("{}/chat/completions", base_url);
+
+            // Add sleep/delay before sending the streaming request (500ms)
+            log!("Sleeping for 500ms before sending OpenAI streaming request...");
+            OpenAIClient::sleep(500).await;
+            log!("Sleep completed, sending streaming request now");
 
             // For WASM, we'll simulate streaming like we did with Gemini
             let response = Request::post(&url)
                 .header("Content-Type", "application/json")
                 .header("Authorization", &format!("Bearer {}", api_key))
                 .json(&request_body)
-                .map_err(|e| format!("Failed to create request: {}", e))? 
+                .map_err(|e| format!("Failed to create request: {}", e))?
                 .send()
                 .await
                 .map_err(|e| format!("Network error: {}", e))?;
 
             if !response.ok() {
                 let status = response.status();
-                let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+                let error_text = response
+                    .text()
+                    .await
+                    .unwrap_or_else(|_| "Unknown error".to_string());
                 return Err(format!("API error {}: {}", status, error_text));
             }
 
-            let response_text = response.text().await.map_err(|e| format!("Failed to read response: {}", e))?;
-            
+            let response_text = response
+                .text()
+                .await
+                .map_err(|e| format!("Failed to read response: {}", e))?;
+
             // For now, send the full response as a single chunk
             callback(response_text, None);
-            
+
             Ok(())
         })
     }
@@ -474,12 +648,12 @@ impl LLMClient for OpenAIClient {
                 .data
                 .into_iter()
                 .filter_map(|model| {
-                    if model.object == "model" && (
-                        model.id.starts_with("gpt-") ||
-                        model.id.starts_with("claude-") ||
-                        model.id.contains("chat") ||
-                        model.id.contains("instruct")
-                    ) {
+                    if model.object == "model"
+                        && (model.id.starts_with("gpt-")
+                            || model.id.starts_with("claude-")
+                            || model.id.contains("chat")
+                            || model.id.contains("instruct"))
+                    {
                         Some(model.id)
                     } else {
                         None
@@ -637,10 +811,7 @@ mod tests {
 
         assert_eq!(openai_messages.len(), 2);
         assert_eq!(openai_messages[0].role, "system");
-        assert_eq!(
-            openai_messages[0].content,
-            Some("Be concise.".to_string())
-        );
+        assert_eq!(openai_messages[0].content, Some("Be concise.".to_string()));
         assert_eq!(openai_messages[1].role, "user");
     }
 
@@ -655,10 +826,7 @@ mod tests {
 
         assert_eq!(openai_messages.len(), 2);
         assert_eq!(openai_messages[0].role, "system");
-        assert_eq!(
-            openai_messages[0].content,
-            Some("Be verbose.".to_string())
-        );
+        assert_eq!(openai_messages[0].content, Some("Be verbose.".to_string()));
         assert_eq!(openai_messages[1].role, "user");
     }
 
@@ -707,7 +875,7 @@ mod tests {
         config.function_tools.push(FunctionTool {
             name: "get_weather".to_string(),
             description: "Get the current weather".to_string(),
-            parameters: json!({ 
+            parameters: json!({
                 "type": "object",
                 "properties": {
                     "location": {

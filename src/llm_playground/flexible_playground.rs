@@ -314,17 +314,35 @@ pub fn flexible_llm_playground() -> Html {
                                         final_response.push_str("\n\n");
                                     }
                                     
+                                    // Add function calls section header
+                                    let num_function_calls = response.function_calls.len();
+                                    final_response.push_str(&format!(
+                                        "## 🔧 Function Execution Sequence ({} {})\n\n",
+                                        num_function_calls,
+                                        if num_function_calls == 1 { "call" } else { "calls" }
+                                    ));
+                                    
+                                    // Add additional context for multiple function calls
+                                    if num_function_calls > 1 {
+                                        final_response.push_str("The AI has requested multiple function calls to be executed in sequence. Each step is detailed below:\n\n");
+                                    }
+                                    
                                     // Add assistant message with function calls to conversation
                                     let assistant_message = Message {
                                         id: format!("msg_fc_{}", js_sys::Date::now() as u64),
                                         role: MessageRole::Assistant,
                                         content: response.content.unwrap_or_default(),
                                         timestamp: js_sys::Date::now(),
-                                        function_call: if let Some(fc) = response.function_calls.first() {
-                                            Some(serde_json::json!({
-                                                "name": fc.name,
-                                                "args": fc.arguments
-                                            }))
+                                        function_call: if !response.function_calls.is_empty() {
+                                            Some(serde_json::json!(
+                                                response.function_calls.iter().map(|fc| {
+                                                    serde_json::json!({
+                                                        "id": format!("function-call-{}", js_sys::Date::now() as u64),
+                                                        "name": fc.name,
+                                                        "arguments": fc.arguments
+                                                    })
+                                                }).collect::<Vec<_>>()
+                                            ))
                                         } else { None },
                                         function_response: None,
                                     };
@@ -375,16 +393,36 @@ pub fn flexible_llm_playground() -> Html {
                                             }
                                         }
                                         
+                                        // Get the call number for this function
+                                        let call_number = response.function_calls.iter().position(|fc| fc.id == function_call.id).map(|i| i + 1).unwrap_or(0);
+                                        
                                         // Add to display (keeping for final response text)
                                         final_response.push_str(&format!(
-                                            "🔧 **Function**: `{}` → {}",
+                                            "### Step {}: Calling `{}`\n\n**Function**: `{}()`\n**Purpose**: {}\n\n**📤 Request Parameters**:\n```json\n{}\n```\n\n**📥 Response Received**:\n```json\n{}\n```\n\n**✅ Function call completed**",
+                                            call_number,
                                             function_call.name,
-                                            serde_json::to_string(&response_value).unwrap_or_else(|_| "Invalid response".to_string())
+                                            function_call.name,
+                                            config
+                                                .function_tools
+                                                .iter()
+                                                .find(|tool| tool.name == function_call.name)
+                                                .map(|tool| tool.description.clone())
+                                                .unwrap_or_else(|| "Execute function".to_string()),
+                                            serde_json::to_string_pretty(&function_call.arguments).unwrap_or_else(|_| "{}".to_string()),
+                                            serde_json::to_string_pretty(&response_value).unwrap_or_else(|_| "Invalid response".to_string())
                                         ));
                                         if function_call != response.function_calls.last().unwrap() {
-                                            final_response.push_str("\n");
+                                            final_response.push_str("\n\n");
                                         }
                                     }
+                                    
+                                    // Add a summary at the end of all function calls
+                                    final_response.push_str("\n\n---\n\n");
+                                    final_response.push_str(&format!(
+                                        "**🔄 Function Execution Summary**: Completed {} function {}.\n\n",
+                                        response.function_calls.len(),
+                                        if response.function_calls.len() == 1 { "call" } else { "calls" }
+                                    ));
                                     
                                     // Check iteration limit
                                     max_iterations -= 1;
