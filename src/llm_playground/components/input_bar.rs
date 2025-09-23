@@ -1,6 +1,5 @@
 use yew::prelude::*;
-use web_sys::{HtmlTextAreaElement, KeyboardEvent, HtmlElement};
-use wasm_bindgen::JsCast;
+use web_sys::{HtmlTextAreaElement, KeyboardEvent};
 
 #[derive(Properties, PartialEq)]
 pub struct InputBarProps {

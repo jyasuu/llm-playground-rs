@@ -1,7 +1,7 @@
 use yew::prelude::*;
 use web_sys::HtmlInputElement;
-use crate::llm_playground::{ApiConfig, ApiProvider, GeminiConfig, OpenAIConfig};
-use crate::llm_playground::types::{SharedSettings, FunctionTool};
+use crate::llm_playground::{ApiConfig, ApiProvider};
+use crate::llm_playground::types::FunctionTool;
 use crate::llm_playground::components::{FunctionToolEditor, VisualFunctionToolEditor};
 
 #[derive(Properties, PartialEq)]

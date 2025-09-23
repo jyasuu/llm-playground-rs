@@ -1,6 +1,6 @@
 // Flexible LLM client that can work with any provider configuration
 use crate::llm_playground::{Message, provider_config::{FlexibleApiConfig, ProviderConfig}};
-use crate::llm_playground::api_clients::{LLMClient, LLMResponse, FunctionCallRequest, StreamCallback, GeminiClient, OpenAIClient};
+use crate::llm_playground::api_clients::{LLMClient, LLMResponse, StreamCallback, GeminiClient, OpenAIClient};
 use std::future::Future;
 use std::pin::Pin;
 use web_sys::js_sys;

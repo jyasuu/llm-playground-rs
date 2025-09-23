@@ -1,8 +1,6 @@
 use yew::prelude::*;
 use crate::llm_playground::{ApiConfig, FunctionTool};
 use crate::llm_playground::api_clients::{FunctionCallRequest, FunctionResponse};
-use gloo_console::log;
-use web_sys::js_sys;
 
 #[derive(Properties, PartialEq)]
 pub struct FunctionCallHandlerProps {

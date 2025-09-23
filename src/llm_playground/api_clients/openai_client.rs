@@ -214,7 +214,7 @@ impl OpenAIClient {
             .header("Content-Type", "application/json")
             .header("Authorization", &format!("Bearer {}", config.openai.api_key))
             .json(&request_body)
-            .map_err(|e| format!("Failed to create request: {}", e))?
+            .map_err(|e| format!("Failed to create request: {}", e))? 
             .send()
             .await
             .map_err(|e| format!("Network error - Check your internet connection and API key: {}", e))?;
@@ -292,7 +292,7 @@ impl LLMClient for OpenAIClient {
                 .header("Content-Type", "application/json")
                 .header("Authorization", &format!("Bearer {}", config_clone.openai.api_key))
                 .json(&request_body)
-                .map_err(|e| format!("Failed to create request: {}", e))?
+                .map_err(|e| format!("Failed to create request: {}", e))? 
                 .send()
                 .await
                 .map_err(|e| format!("Network error - Check your internet connection and API key: {}", e))?;
@@ -404,7 +404,7 @@ impl LLMClient for OpenAIClient {
                 .header("Content-Type", "application/json")
                 .header("Authorization", &format!("Bearer {}", api_key))
                 .json(&request_body)
-                .map_err(|e| format!("Failed to create request: {}", e))?
+                .map_err(|e| format!("Failed to create request: {}", e))? 
                 .send()
                 .await
                 .map_err(|e| format!("Network error: {}", e))?;
@@ -544,5 +544,187 @@ impl Clone for OpenAIClient {
             conversation_history: self.conversation_history.clone(),
             system_prompt: self.system_prompt.clone(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::llm_playground::{ApiConfig, FunctionTool, Message, MessageRole, OpenAIConfig};
+    use serde_json::json;
+
+    // Helper to create a default config for tests
+    fn create_test_config() -> ApiConfig {
+        ApiConfig {
+            openai: OpenAIConfig {
+                base_url: "https://api.openai.com/v1".to_string(),
+                api_key: "test_key".to_string(),
+                model: "gpt-4".to_string(),
+            },
+            ..Default::default()
+        }
+    }
+
+    fn create_test_message(role: MessageRole, content: &str) -> Message {
+        Message {
+            id: "test_id".to_string(),
+            role,
+            content: content.to_string(),
+            timestamp: 0.0,
+            function_call: None,
+            function_response: None,
+        }
+    }
+
+    #[test]
+    fn test_new_openai_client() {
+        let client = OpenAIClient::new();
+        assert!(client.conversation_history.is_empty());
+        assert!(client.system_prompt.is_none());
+    }
+
+    #[test]
+    fn test_set_system_prompt() {
+        let mut client = OpenAIClient::new();
+        let prompt = "You are a helpful assistant.";
+        client.set_system_prompt(prompt);
+        assert_eq!(client.system_prompt, Some(prompt.to_string()));
+    }
+
+    #[test]
+    fn test_add_user_message() {
+        let mut client = OpenAIClient::new();
+        client.add_user_message("Hello");
+        assert_eq!(client.conversation_history.len(), 1);
+        assert_eq!(client.conversation_history[0].role, "user");
+        assert_eq!(client.conversation_history[0].content, "Hello");
+    }
+
+    #[test]
+    fn test_add_assistant_message() {
+        let mut client = OpenAIClient::new();
+        client.add_assistant_message("Hi there!", None);
+        assert_eq!(client.conversation_history.len(), 1);
+        assert_eq!(client.conversation_history[0].role, "assistant");
+        assert_eq!(client.conversation_history[0].content, "Hi there!");
+    }
+
+    #[test]
+    fn test_clear_conversation() {
+        let mut client = OpenAIClient::new();
+        client.add_user_message("Hello");
+        client.clear_conversation();
+        assert!(client.conversation_history.is_empty());
+    }
+
+    #[test]
+    fn test_convert_messages_to_openai_simple() {
+        let client = OpenAIClient::new();
+        let messages = vec![create_test_message(MessageRole::User, "Hello")];
+        let openai_messages = client.convert_messages_to_openai(&messages);
+
+        assert_eq!(openai_messages.len(), 1);
+        assert_eq!(openai_messages[0].role, "user");
+        assert_eq!(openai_messages[0].content, Some("Hello".to_string()));
+    }
+
+    #[test]
+    fn test_convert_messages_with_system_prompt_from_client() {
+        let mut client = OpenAIClient::new();
+        client.set_system_prompt("Be concise.");
+        let messages = vec![create_test_message(MessageRole::User, "Hello")];
+        let openai_messages = client.convert_messages_to_openai(&messages);
+
+        assert_eq!(openai_messages.len(), 2);
+        assert_eq!(openai_messages[0].role, "system");
+        assert_eq!(
+            openai_messages[0].content,
+            Some("Be concise.".to_string())
+        );
+        assert_eq!(openai_messages[1].role, "user");
+    }
+
+    #[test]
+    fn test_convert_messages_with_system_prompt_from_message() {
+        let client = OpenAIClient::new();
+        let messages = vec![
+            create_test_message(MessageRole::System, "Be verbose."),
+            create_test_message(MessageRole::User, "Hello"),
+        ];
+        let openai_messages = client.convert_messages_to_openai(&messages);
+
+        assert_eq!(openai_messages.len(), 2);
+        assert_eq!(openai_messages[0].role, "system");
+        assert_eq!(
+            openai_messages[0].content,
+            Some("Be verbose.".to_string())
+        );
+        assert_eq!(openai_messages[1].role, "user");
+    }
+
+    #[test]
+    fn test_convert_messages_with_history() {
+        let mut client = OpenAIClient::new();
+        client.add_user_message("First message");
+        client.add_assistant_message("First response", None);
+
+        let messages = vec![create_test_message(MessageRole::User, "Second message")];
+
+        let openai_messages = client.convert_messages_to_openai(&messages);
+
+        assert_eq!(openai_messages.len(), 3);
+        assert_eq!(openai_messages[0].role, "user");
+        assert_eq!(
+            openai_messages[0].content,
+            Some("First message".to_string())
+        );
+        assert_eq!(openai_messages[1].role, "assistant");
+        assert_eq!(
+            openai_messages[1].content,
+            Some("First response".to_string())
+        );
+        assert_eq!(openai_messages[2].role, "user");
+        assert_eq!(
+            openai_messages[2].content,
+            Some("Second message".to_string())
+        );
+    }
+
+    #[test]
+    fn test_build_tools_empty() {
+        let client = OpenAIClient::new();
+        let mut config = ApiConfig::default();
+        config.function_tools = vec![];
+        let tools = client.build_tools(&config);
+        assert!(tools.is_none());
+    }
+
+    #[test]
+    fn test_build_tools_with_one_tool() {
+        let client = OpenAIClient::new();
+        let mut config = create_test_config();
+        config.function_tools.clear(); // Clear default tools
+        config.function_tools.push(FunctionTool {
+            name: "get_weather".to_string(),
+            description: "Get the current weather".to_string(),
+            parameters: json!({ 
+                "type": "object",
+                "properties": {
+                    "location": {
+                        "type": "string",
+                        "description": "The city and state, e.g. San Francisco, CA"
+                    }
+                }
+            }),
+            mock_response: "".to_string(),
+        });
+
+        let tools = client.build_tools(&config);
+        assert!(tools.is_some());
+        let tool_vec = tools.unwrap();
+        assert_eq!(tool_vec.len(), 1);
+        let tool_json = &tool_vec[0];
+        assert_eq!(tool_json["type"], "function");
+        assert_eq!(tool_json["function"]["name"], "get_weather");
     }
 }

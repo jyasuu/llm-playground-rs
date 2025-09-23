@@ -6,11 +6,6 @@ use serde::{Deserialize, Serialize};
 use gloo_console::log;
 use std::future::Future;
 use std::pin::Pin;
-use wasm_bindgen_futures::spawn_local;
-use web_sys::{ReadableStream, Response as WebResponse};
-use js_sys::{Uint8Array, Promise};
-use wasm_bindgen::prelude::*;
-use wasm_bindgen::JsCast;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct GeminiRequest {
@@ -546,5 +541,172 @@ impl ConversationManager for GeminiClient {
 
     fn get_conversation_history(&self) -> &[ConversationMessage] {
         &self.conversation_history
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::llm_playground::{ApiConfig, FunctionTool, Message, MessageRole};
+    use serde_json::json;
+
+    fn create_test_client() -> GeminiClient {
+        GeminiClient::new()
+    }
+
+    fn create_test_message(role: MessageRole, content: &str) -> Message {
+        Message {
+            id: "test_id".to_string(),
+            role,
+            content: content.to_string(),
+            timestamp: 0.0,
+            function_call: None,
+            function_response: None,
+        }
+    }
+
+    #[test]
+    fn test_new_gemini_client() {
+        let client = create_test_client();
+        assert!(client.conversation_history.is_empty());
+        assert!(client.system_prompt.is_none());
+    }
+
+    #[test]
+    fn test_set_system_prompt() {
+        let mut client = create_test_client();
+        let prompt = "You are a helpful assistant.";
+        client.set_system_prompt(prompt);
+        assert_eq!(client.system_prompt, Some(prompt.to_string()));
+    }
+
+    #[test]
+    fn test_add_user_message() {
+        let mut client = create_test_client();
+        client.add_user_message("Hello");
+        assert_eq!(client.conversation_history.len(), 1);
+        assert_eq!(client.conversation_history[0].role, "user");
+        assert_eq!(client.conversation_history[0].content, "Hello");
+    }
+
+    #[test]
+    fn test_add_assistant_message() {
+        let mut client = create_test_client();
+        client.add_assistant_message("Hi there!", None);
+        assert_eq!(client.conversation_history.len(), 1);
+        assert_eq!(client.conversation_history[0].role, "model");
+        assert_eq!(client.conversation_history[0].content, "Hi there!");
+    }
+
+    #[test]
+    fn test_clear_conversation() {
+        let mut client = create_test_client();
+        client.add_user_message("Hello");
+        client.clear_conversation();
+        assert!(client.conversation_history.is_empty());
+    }
+
+    #[test]
+    fn test_convert_messages_to_contents_simple() {
+        let client = create_test_client();
+        let messages = vec![create_test_message(MessageRole::User, "Hello")];
+        let (contents, system_instruction) = client.convert_messages_to_contents(&messages);
+
+        assert!(system_instruction.is_none());
+        assert_eq!(contents.len(), 1);
+        assert_eq!(contents[0].role, "user");
+        assert_eq!(contents[0].parts.len(), 1);
+        assert_eq!(contents[0].parts[0].text, Some("Hello".to_string()));
+    }
+
+    #[test]
+    fn test_convert_messages_with_system_prompt_from_client() {
+        let mut client = create_test_client();
+        client.set_system_prompt("Be concise.");
+        let messages = vec![create_test_message(MessageRole::User, "Hello")];
+        let (contents, system_instruction) = client.convert_messages_to_contents(&messages);
+
+        assert!(system_instruction.is_some());
+        let instruction = system_instruction.unwrap();
+        assert_eq!(instruction.parts[0].text, Some("Be concise.".to_string()));
+        assert_eq!(contents.len(), 1);
+    }
+
+    #[test]
+    fn test_convert_messages_with_system_prompt_from_message() {
+        let client = create_test_client();
+        let messages = vec![
+            create_test_message(MessageRole::System, "Be verbose."),
+            create_test_message(MessageRole::User, "Hello"),
+        ];
+        let (contents, system_instruction) = client.convert_messages_to_contents(&messages);
+
+        assert!(system_instruction.is_some());
+        let instruction = system_instruction.unwrap();
+        assert_eq!(instruction.parts[0].text, Some("Be verbose.".to_string()));
+        assert_eq!(contents.len(), 1);
+        assert_eq!(contents[0].role, "user");
+    }
+
+    #[test]
+    fn test_convert_messages_with_history() {
+        let mut client = create_test_client();
+        client.add_user_message("First message");
+        client.add_assistant_message("First response", None);
+
+        let messages = vec![create_test_message(MessageRole::User, "Second message")];
+
+        let (contents, _) = client.convert_messages_to_contents(&messages);
+
+        assert_eq!(contents.len(), 3);
+        assert_eq!(contents[0].role, "user");
+        assert_eq!(contents[0].parts[0].text, Some("First message".to_string()));
+        assert_eq!(contents[1].role, "model");
+        assert_eq!(
+            contents[1].parts[0].text,
+            Some("First response".to_string())
+        );
+        assert_eq!(contents[2].role, "user");
+        assert_eq!(
+            contents[2].parts[0].text,
+            Some("Second message".to_string())
+        );
+    }
+
+    #[test]
+    fn test_build_tools_empty() {
+        let client = create_test_client();
+        let mut config = ApiConfig::default();
+        config.function_tools = vec![];
+        let tools = client.build_tools(&config);
+        assert!(tools.is_none());
+    }
+
+    #[test]
+    fn test_build_tools_with_one_tool() {
+        let client = create_test_client();
+        let mut config = ApiConfig::default();
+        config.function_tools.clear();
+        config.function_tools.push(FunctionTool {
+            name: "get_weather".to_string(),
+            description: "Get the current weather".to_string(),
+            parameters: json!({
+                "type": "object",
+                "properties": {
+                    "location": {
+                        "type": "string",
+                        "description": "The city and state, e.g. San Francisco, CA"
+                    }
+                }
+            }),
+            mock_response: "".to_string(),
+        });
+
+        let tools = client.build_tools(&config);
+        assert!(tools.is_some());
+        let tool_vec = tools.unwrap();
+        assert_eq!(tool_vec.len(), 1);
+        assert_eq!(tool_vec[0].function_declarations.len(), 1);
+        assert_eq!(tool_vec[0].function_declarations[0].name, "get_weather");
     }
 }

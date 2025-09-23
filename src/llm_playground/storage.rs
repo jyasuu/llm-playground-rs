@@ -1,6 +1,5 @@
 // Local storage utilities for LLM Playground
 use gloo_storage::{LocalStorage, Storage};
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use super::{ChatSession, ApiConfig};
 

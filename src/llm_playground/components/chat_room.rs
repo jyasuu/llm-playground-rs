@@ -1,5 +1,5 @@
 use yew::prelude::*;
-use crate::llm_playground::{ChatSession, Message};
+use crate::llm_playground::ChatSession;
 use super::message_bubble::MessageBubble;
 
 #[derive(Properties, PartialEq)]

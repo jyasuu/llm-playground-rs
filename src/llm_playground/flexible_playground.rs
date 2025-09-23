@@ -1,6 +1,5 @@
 // Updated LLM Playground with flexible provider system
 use yew::prelude::*;
-use web_sys::HtmlTextAreaElement;
 use gloo_storage::{LocalStorage, Storage};
 use std::collections::HashMap;
 use gloo_console::log;

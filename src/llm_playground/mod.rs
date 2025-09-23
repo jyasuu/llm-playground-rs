@@ -11,12 +11,11 @@ pub use components::*;
 pub use storage::*;
 pub use api_clients::*;
 pub use types::*;
-pub use provider_config::{FlexibleApiConfig, ProviderConfig, TransformerConfig, RouterConfig};
+pub use provider_config::FlexibleApiConfig;
 pub use flexible_playground::FlexibleLLMPlayground;
 
 use yew::prelude::*;
-use web_sys::HtmlTextAreaElement;
-use gloo_storage::{LocalStorage, Storage};
+use gloo_storage::Storage;
 use std::collections::HashMap;
 use gloo_console::log;
 use crate::llm_playground::api_clients::{GeminiClient, OpenAIClient};

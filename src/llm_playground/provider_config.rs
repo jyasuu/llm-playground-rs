@@ -1,6 +1,5 @@
 // New flexible provider configuration system
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ProviderConfig {

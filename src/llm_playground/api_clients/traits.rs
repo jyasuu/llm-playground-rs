@@ -2,9 +2,6 @@
 use crate::llm_playground::{Message, ApiConfig};
 use std::future::Future;
 use std::pin::Pin;
-use wasm_bindgen_futures::spawn_local;
-use gloo_timers::callback::Timeout;
-use web_sys::js_sys;
 
 // Stream callback type for handling streaming responses
 pub type StreamCallback = Box<dyn Fn(String, Option<serde_json::Value>) + 'static>;
