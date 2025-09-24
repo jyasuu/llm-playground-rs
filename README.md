@@ -18,6 +18,10 @@ git clone https://github.com/jyasuu/chat-cli.git
 # chat-cli/src/openai.rs
 
 
+wget https://github.com/trunk-rs/trunk/releases/download/v0.21.14/trunk-x86_64-unknown-linux-gnu.tar.gz
+tar -xvf trunk-x86_64-unknown-linux-gnu.tar.gz
+./trunk serve
+
 ```
 
 # original

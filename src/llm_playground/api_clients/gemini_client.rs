@@ -343,8 +343,11 @@ impl LLMClient for GeminiClient {
                         function_call.get("name").and_then(|v| v.as_str()),
                         function_call.get("args")
                     ) {
-                        // Generate a unique ID for this function call
-                        let id = format!("fc-{}-{}", name, js_sys::Date::now() as u64);
+                        // Use the function call ID from Gemini (or generate one if not provided)
+                        let id = function_call.get("id")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string())
+                            .unwrap_or_else(|| format!("fc-{}-{}", name, js_sys::Date::now() as u64));
                         
                         function_calls.push(FunctionCallRequest {
                             id,

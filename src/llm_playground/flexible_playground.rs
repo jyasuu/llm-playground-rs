@@ -337,7 +337,7 @@ pub fn flexible_llm_playground() -> Html {
                                             Some(serde_json::json!(
                                                 response.function_calls.iter().map(|fc| {
                                                     serde_json::json!({
-                                                        "id": format!("function-call-{}", js_sys::Date::now() as u64),
+                                                        "id": fc.id,
                                                         "name": fc.name,
                                                         "arguments": fc.arguments
                                                     })
