@@ -50,60 +50,132 @@ pub fn message_bubble(props: &MessageBubbleProps) -> Html {
                 
                 // Function call display
                 {if let Some(function_call) = &props.message.function_call {
-                    html! {
-                        <div class="function-call bg-gradient-to-r from-orange-50 to-yellow-50 dark:from-orange-900/20 dark:to-yellow-900/20 rounded-lg p-4 mt-3 border border-orange-200 dark:border-orange-700">
-                            <div class="flex items-center mb-3">
-                                <i class="fas fa-play-circle text-orange-600 dark:text-orange-400 mr-2"></i>
-                                <span class="font-semibold text-orange-800 dark:text-orange-300">{"Function Call Invoked"}</span>
-                            </div>
-                            
-                            {if let Some(name) = function_call.get("name") {
-                                html! {
-                                    <div class="mb-2">
-                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 dark:bg-orange-900/50 text-orange-800 dark:text-orange-300">
-                                            <i class="fas fa-function mr-1"></i>
-                                            {name.as_str().unwrap_or("Unknown")}
-                                        </span>
-                                    </div>
-                                }
-                            } else {
-                                html! {}
-                            }}
-                            
-                            {if let Some(args) = function_call.get("args") {
-                                html! {
-                                    <div>
-                                        <div class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{"Parameters:"}</div>
-                                        <div class="bg-white dark:bg-gray-800 rounded-md p-3 border border-gray-200 dark:border-gray-600">
-                                            {if let Some(args_obj) = args.as_object() {
+                    // Handle function calls as an array
+                    if let Some(function_calls_array) = function_call.as_array() {
+                        html! {
+                            <div class="function-calls">
+                                {for function_calls_array.iter().enumerate().map(|(index, fc)| {
+                                    html! {
+                                        <div class="function-call bg-gradient-to-r from-orange-50 to-yellow-50 dark:from-orange-900/20 dark:to-yellow-900/20 rounded-lg p-4 mt-3 border border-orange-200 dark:border-orange-700">
+                                            <div class="flex items-center mb-3">
+                                                <i class="fas fa-play-circle text-orange-600 dark:text-orange-400 mr-2"></i>
+                                                <span class="font-semibold text-orange-800 dark:text-orange-300">
+                                                    {if function_calls_array.len() > 1 {
+                                                        format!("Function Call {} of {}", index + 1, function_calls_array.len())
+                                                    } else {
+                                                        "Function Call Invoked".to_string()
+                                                    }}
+                                                </span>
+                                            </div>
+                                            
+                                            {if let Some(name) = fc.get("name") {
                                                 html! {
-                                                    <div class="space-y-2">
-                                                        {for args_obj.iter().map(|(key, value)| {
-                                                            html! {
-                                                                <div class="flex items-start">
-                                                                    <span class="text-xs font-mono bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded mr-2 text-blue-600 dark:text-blue-400">{key}</span>
-                                                                    <span class="text-xs font-mono text-gray-800 dark:text-gray-200 flex-1">{format!("{}", value)}</span>
-                                                                </div>
-                                                            }
-                                                        })}
+                                                    <div class="mb-2">
+                                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 dark:bg-orange-900/50 text-orange-800 dark:text-orange-300">
+                                                            <i class="fas fa-function mr-1"></i>
+                                                            {name.as_str().unwrap_or("Unknown")}
+                                                        </span>
+                                                    </div>
+                                                }
+                                            } else {
+                                                html! {}
+                                            }}
+                                            
+                                            {if let Some(args) = fc.get("arguments") {
+                                                html! {
+                                                    <div>
+                                                        <div class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{"Parameters:"}</div>
+                                                        <div class="bg-white dark:bg-gray-800 rounded-md p-3 border border-gray-200 dark:border-gray-600">
+                                                            {if let Some(args_obj) = args.as_object() {
+                                                                html! {
+                                                                    <div class="space-y-2">
+                                                                        {for args_obj.iter().map(|(key, value)| {
+                                                                            html! {
+                                                                                <div class="flex items-start">
+                                                                                    <span class="text-xs font-mono bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded mr-2 text-blue-600 dark:text-blue-400">{key}</span>
+                                                                                    <span class="text-xs font-mono text-gray-800 dark:text-gray-200 flex-1">{format!("{}", value)}</span>
+                                                                                </div>
+                                                                            }
+                                                                        })}
+                                                                    </div>
+                                                                }
+                                                            } else {
+                                                                html! {
+                                                                    <pre class="text-xs font-mono text-gray-800 dark:text-gray-200 overflow-x-auto">
+                                                                        <code>{serde_json::to_string_pretty(args).unwrap_or_else(|_| "Invalid parameters".to_string())}</code>
+                                                                    </pre>
+                                                                }
+                                                            }}
+                                                        </div>
                                                     </div>
                                                 }
                                             } else {
                                                 html! {
-                                                    <pre class="text-xs font-mono text-gray-800 dark:text-gray-200 overflow-x-auto">
-                                                        <code>{serde_json::to_string_pretty(args).unwrap_or_else(|_| "Invalid parameters".to_string())}</code>
-                                                    </pre>
+                                                    <div class="text-sm text-gray-500 dark:text-gray-400 italic">{"No parameters"}</div>
                                                 }
                                             }}
                                         </div>
-                                    </div>
-                                }
-                            } else {
-                                html! {
-                                    <div class="text-sm text-gray-500 dark:text-gray-400 italic">{"No parameters"}</div>
-                                }
-                            }}
-                        </div>
+                                    }
+                                })}
+                            </div>
+                        }
+                    } else {
+                        // Fallback for single function call object (backward compatibility)
+                        html! {
+                            <div class="function-call bg-gradient-to-r from-orange-50 to-yellow-50 dark:from-orange-900/20 dark:to-yellow-900/20 rounded-lg p-4 mt-3 border border-orange-200 dark:border-orange-700">
+                                <div class="flex items-center mb-3">
+                                    <i class="fas fa-play-circle text-orange-600 dark:text-orange-400 mr-2"></i>
+                                    <span class="font-semibold text-orange-800 dark:text-orange-300">{"Function Call Invoked"}</span>
+                                </div>
+                                
+                                {if let Some(name) = function_call.get("name") {
+                                    html! {
+                                        <div class="mb-2">
+                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 dark:bg-orange-900/50 text-orange-800 dark:text-orange-300">
+                                                <i class="fas fa-function mr-1"></i>
+                                                {name.as_str().unwrap_or("Unknown")}
+                                            </span>
+                                        </div>
+                                    }
+                                } else {
+                                    html! {}
+                                }}
+                                
+                                {if let Some(args) = function_call.get("arguments") {
+                                    html! {
+                                        <div>
+                                            <div class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">{"Parameters:"}</div>
+                                            <div class="bg-white dark:bg-gray-800 rounded-md p-3 border border-gray-200 dark:border-gray-600">
+                                                {if let Some(args_obj) = args.as_object() {
+                                                    html! {
+                                                        <div class="space-y-2">
+                                                            {for args_obj.iter().map(|(key, value)| {
+                                                                html! {
+                                                                    <div class="flex items-start">
+                                                                        <span class="text-xs font-mono bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded mr-2 text-blue-600 dark:text-blue-400">{key}</span>
+                                                                        <span class="text-xs font-mono text-gray-800 dark:text-gray-200 flex-1">{format!("{}", value)}</span>
+                                                                    </div>
+                                                                }
+                                                            })}
+                                                        </div>
+                                                    }
+                                                } else {
+                                                    html! {
+                                                        <pre class="text-xs font-mono text-gray-800 dark:text-gray-200 overflow-x-auto">
+                                                            <code>{serde_json::to_string_pretty(args).unwrap_or_else(|_| "Invalid parameters".to_string())}</code>
+                                                        </pre>
+                                                    }
+                                                }}
+                                            </div>
+                                        </div>
+                                    }
+                                } else {
+                                    html! {
+                                        <div class="text-sm text-gray-500 dark:text-gray-400 italic">{"No parameters"}</div>
+                                    }
+                                }}
+                            </div>
+                        }
                     }
                 } else {
                     html! {}
