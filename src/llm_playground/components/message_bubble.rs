@@ -10,28 +10,28 @@ pub struct MessageBubbleProps {
 pub fn message_bubble(props: &MessageBubbleProps) -> Html {
     let (icon_class, bg_class, label, icon) = match props.message.role {
         MessageRole::System => (
-            "bg-yellow-100 dark:bg-yellow-900/30",
-            "bg-yellow-50 dark:bg-yellow-900/20",
+            "bg-yellow-100 dark:bg-yellow-900/50",
+            "bg-yellow-50 dark:bg-yellow-900/30",
             "System",
-            "fas fa-cog text-yellow-600 dark:text-yellow-400"
+            "fas fa-cog text-yellow-600 dark:text-yellow-300"
         ),
         MessageRole::User => (
-            "bg-blue-100 dark:bg-blue-900/30",
-            "bg-blue-50 dark:bg-blue-900/20",
+            "bg-blue-100 dark:bg-blue-900/50",
+            "bg-blue-50 dark:bg-blue-900/30",
             "You",
-            "fas fa-user text-blue-600 dark:text-blue-400"
+            "fas fa-user text-blue-600 dark:text-blue-300"
         ),
         MessageRole::Assistant => (
-            "bg-purple-100 dark:bg-purple-900/30",
-            "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700",
+            "bg-purple-100 dark:bg-purple-900/50",
+            "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600",
             "Assistant",
-            "fas fa-robot text-purple-600 dark:text-purple-400"
+            "fas fa-robot text-purple-600 dark:text-purple-300"
         ),
         MessageRole::Function => (
-            "bg-green-100 dark:bg-green-900/30",
-            "bg-green-50 dark:bg-green-900/20",
+            "bg-green-100 dark:bg-green-900/50",
+            "bg-green-50 dark:bg-green-900/30",
             "Function",
-            "fas fa-code text-green-600 dark:text-green-400"
+            "fas fa-code text-green-600 dark:text-green-300"
         ),
     };
 
@@ -41,7 +41,7 @@ pub fn message_bubble(props: &MessageBubbleProps) -> Html {
                 <i class={icon}></i>
             </div>
             <div class={classes!("flex-1", "rounded-lg", "p-4", bg_class)}>
-                <div class="font-medium mb-1">{label}</div>
+                <div class="font-medium mb-1 text-gray-900 dark:text-gray-100">{label}</div>
                 
                 // Regular message content
                 <div class="message-content text-sm">
@@ -56,7 +56,7 @@ pub fn message_bubble(props: &MessageBubbleProps) -> Html {
                             <div class="function-calls">
                                 {for function_calls_array.iter().enumerate().map(|(index, fc)| {
                                     html! {
-                                        <div class="function-call bg-gradient-to-r from-orange-50 to-yellow-50 dark:from-orange-900/20 dark:to-yellow-900/20 rounded-lg p-4 mt-3 border border-orange-200 dark:border-orange-700">
+                                        <div class="function-call bg-gradient-to-r from-orange-50 to-yellow-50 dark:from-orange-900/40 dark:to-yellow-900/40 rounded-lg p-4 mt-3 border border-orange-200 dark:border-orange-600">
                                             <div class="flex items-center mb-3">
                                                 <i class="fas fa-play-circle text-orange-600 dark:text-orange-400 mr-2"></i>
                                                 <span class="font-semibold text-orange-800 dark:text-orange-300">
@@ -122,7 +122,7 @@ pub fn message_bubble(props: &MessageBubbleProps) -> Html {
                     } else {
                         // Fallback for single function call object (backward compatibility)
                         html! {
-                            <div class="function-call bg-gradient-to-r from-orange-50 to-yellow-50 dark:from-orange-900/20 dark:to-yellow-900/20 rounded-lg p-4 mt-3 border border-orange-200 dark:border-orange-700">
+                            <div class="function-call bg-gradient-to-r from-orange-50 to-yellow-50 dark:from-orange-900/40 dark:to-yellow-900/40 rounded-lg p-4 mt-3 border border-orange-200 dark:border-orange-600">
                                 <div class="flex items-center mb-3">
                                     <i class="fas fa-play-circle text-orange-600 dark:text-orange-400 mr-2"></i>
                                     <span class="font-semibold text-orange-800 dark:text-orange-300">{"Function Call Invoked"}</span>
@@ -184,7 +184,7 @@ pub fn message_bubble(props: &MessageBubbleProps) -> Html {
                 // Function response display
                 {if let Some(function_response) = &props.message.function_response {
                     html! {
-                        <div class="function-response bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg p-4 mt-3 border border-green-200 dark:border-green-700">
+                        <div class="function-response bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/40 dark:to-emerald-900/40 rounded-lg p-4 mt-3 border border-green-200 dark:border-green-600">
                             <div class="flex items-center mb-3">
                                 <i class="fas fa-check-circle text-green-600 dark:text-green-400 mr-2"></i>
                                 <span class="font-semibold text-green-800 dark:text-green-300">{"Function Response"}</span>
@@ -230,7 +230,7 @@ pub fn message_bubble(props: &MessageBubbleProps) -> Html {
                 }}
                 
                 // Timestamp
-                <div class="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                <div class="text-xs text-gray-600 dark:text-gray-300 mt-2">
                     {format_timestamp(props.message.timestamp)}
                 </div>
             </div>
@@ -255,8 +255,8 @@ fn parse_markdown(content: &str) -> Html {
                 // End of code block
                 let code_content = code_block_content.join("\n");
                 lines.push(html! {
-                    <pre class="bg-gray-900 text-gray-100 p-4 rounded-lg my-3 overflow-x-auto border-l-4 border-blue-500">
-                        <div class="text-xs text-gray-400 mb-2">{if code_block_language.is_empty() { "Code" } else { &code_block_language }}</div>
+                    <pre class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100 p-4 rounded-lg my-3 overflow-x-auto border-l-4 border-blue-500 dark:border-blue-400">
+                        <div class="text-xs text-gray-600 dark:text-gray-400 mb-2">{if code_block_language.is_empty() { "Code" } else { &code_block_language }}</div>
                         <code class="text-sm">{code_content}</code>
                     </pre>
                 });

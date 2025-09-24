@@ -226,7 +226,7 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
         <div class="absolute inset-y-0 right-0 w-96 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 overflow-y-auto custom-scrollbar z-50">
             <div class="p-4 border-b border-gray-200 dark:border-gray-700">
                 <div class="flex justify-between items-center">
-                    <h2 class="text-lg font-semibold">{"Settings"}</h2>
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">{"Settings"}</h2>
                     <button 
                         onclick={on_close}
                         class="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
@@ -239,7 +239,7 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
             <div class="p-4 space-y-6">
                 // API Selection
                 <div>
-                    <h3 class="font-medium mb-2">{"API Configuration"}</h3>
+                    <h3 class="font-medium mb-2 text-gray-900 dark:text-gray-100">{"API Configuration"}</h3>
                     <div class="space-y-4">
                         <div class="flex items-center">
                             <input 
@@ -273,7 +273,7 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
                     html! {
                         <div>
                             <div class="mb-4">
-                                <label class="block text-sm font-medium mb-1" for="gemini-key">{"API Key"}</label>
+                                <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="gemini-key">{"API Key"}</label>
                                 <input 
                                     type="password" 
                                     id="gemini-key" 
@@ -284,7 +284,7 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
                                 />
                             </div>
                             <div class="mb-4">
-                                <label class="block text-sm font-medium mb-1" for="gemini-model">{"Model"}</label>
+                                <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="gemini-model">{"Model"}</label>
                                 <select 
                                     id="gemini-model" 
                                     value={config.gemini.model.clone()}
@@ -350,9 +350,9 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
                 
                 // General Settings
                 <div>
-                    <h3 class="font-medium mb-2">{"General Settings"}</h3>
+                    <h3 class="font-medium mb-2 text-gray-900 dark:text-gray-100">{"General Settings"}</h3>
                     <div class="mb-4">
-                        <label class="block text-sm font-medium mb-1" for="temperature">
+                        <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="temperature">
                             {format!("Temperature: {:.1}", config.shared_settings.temperature)}
                         </label>
                         <input 
@@ -367,7 +367,7 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
                         />
                     </div>
                     <div class="mb-4">
-                        <label class="block text-sm font-medium mb-1" for="max-tokens">{"Max Tokens"}</label>
+                        <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="max-tokens">{"Max Tokens"}</label>
                         <input 
                             type="number" 
                             id="max-tokens" 
@@ -377,7 +377,7 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
                         />
                     </div>
                     <div class="mb-4">
-                        <label class="block text-sm font-medium mb-1" for="retry-delay">{"Retry Delay (ms)"}</label>
+                        <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="retry-delay">{"Retry Delay (ms)"}</label>
                         <input 
                             type="number" 
                             id="retry-delay" 
@@ -390,7 +390,7 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
                 
                 // System Prompt
                 <div>
-                    <h3 class="font-medium mb-2">{"System Prompt"}</h3>
+                    <h3 class="font-medium mb-2 text-gray-900 dark:text-gray-100">{"System Prompt"}</h3>
                     <textarea 
                         id="system-prompt" 
                         value={config.system_prompt.clone()}
@@ -403,7 +403,7 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
                 // Function Tools
                 <div>
                     <div class="flex items-center justify-between mb-4">
-                        <h3 class="font-medium">{"Function Tools"}</h3>
+                        <h3 class="font-medium text-gray-900 dark:text-gray-100">{"Function Tools"}</h3>
                         <div class="flex items-center space-x-2">
                             <span class="text-sm text-gray-600 dark:text-gray-300">{"Editor:"}</span>
                             <button 

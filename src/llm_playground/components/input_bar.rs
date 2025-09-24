@@ -59,11 +59,11 @@ pub fn input_bar(props: &InputBarProps) -> Html {
 
     html! {
         <div class="p-4 border-t border-gray-200 dark:border-gray-700">
-            <div class="flex items-end border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 p-2">
+            <div class="flex items-end border border-gray-300 dark:border-gray-500 rounded-lg bg-white dark:bg-gray-800 p-2">
                 <div class="flex-1">
                     <textarea 
                         ref={textarea_ref}
-                        class="w-full resize-none border-0 focus:ring-0 bg-transparent dark:bg-transparent p-2 text-sm" 
+                        class="w-full resize-none border-0 focus:ring-0 bg-transparent dark:bg-transparent p-2 text-sm text-gray-900 dark:text-gray-100" 
                         rows="1" 
                         placeholder="Type your message here..." 
                         style="outline: none; min-height: 20px;"
@@ -101,7 +101,7 @@ pub fn input_bar(props: &InputBarProps) -> Html {
                     </button>
                 </div>
             </div>
-            <div class="text-xs text-gray-500 dark:text-gray-400 mt-2 flex justify-between">
+            <div class="text-xs text-gray-600 dark:text-gray-300 mt-2 flex justify-between">
                 <span>
                     <i class="fas fa-keyboard mr-1"></i>
                     {"Enter to send • Shift+Enter for new line"}

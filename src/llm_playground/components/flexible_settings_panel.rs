@@ -252,7 +252,7 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
         <div class="absolute inset-y-0 right-0 w-96 bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 overflow-y-auto custom-scrollbar z-50">
             <div class="p-4 border-b border-gray-200 dark:border-gray-700">
                 <div class="flex justify-between items-center">
-                    <h2 class="text-lg font-semibold">{"Settings"}</h2>
+                    <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">{"Settings"}</h2>
                     <button 
                         onclick={on_close}
                         class="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
@@ -266,7 +266,7 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                 // Provider Management
                 <div>
                     <div class="flex justify-between items-center mb-4">
-                        <h3 class="font-medium">{"LLM Providers"}</h3>
+                        <h3 class="font-medium text-gray-900 dark:text-gray-100">{"LLM Providers"}</h3>
                         <div class="flex space-x-2">
                             <button 
                                 onclick={
@@ -294,7 +294,7 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                     
                     // Provider selector
                     <div class="mb-4">
-                        <label class="block text-sm font-medium mb-1">{"Select Provider"}</label>
+                        <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">{"Select Provider"}</label>
                         <select 
                             value={selected_provider_index.to_string()}
                             onchange={on_provider_select}
@@ -315,7 +315,7 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                         html! {
                             <div class="space-y-4 p-4 border border-gray-200 dark:border-gray-600 rounded-md">
                                 <div>
-                                    <label class="block text-sm font-medium mb-1">{"Provider Name"}</label>
+                                    <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">{"Provider Name"}</label>
                                     <input 
                                         type="text" 
                                         value={provider.name.clone()}
@@ -331,7 +331,7 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                                 </div>
                                 
                                 <div>
-                                    <label class="block text-sm font-medium mb-1">{"API Base URL"}</label>
+                                    <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">{"API Base URL"}</label>
                                     <input 
                                         type="text" 
                                         value={provider.api_base_url.clone()}
@@ -348,7 +348,7 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                                 </div>
                                 
                                 <div>
-                                    <label class="block text-sm font-medium mb-1">{"API Key"}</label>
+                                    <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">{"API Key"}</label>
                                     <input 
                                         type="password" 
                                         value={provider.api_key.clone()}
@@ -366,7 +366,7 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                                 
                                 // Transformer type
                                 <div>
-                                    <label class="block text-sm font-medium mb-1">{"API Type"}</label>
+                                    <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">{"API Type"}</label>
                                     <div class="text-sm text-gray-600 dark:text-gray-300">
                                         {format!("Uses: {}", provider.transformer.r#use.join(", "))}
                                     </div>
@@ -374,7 +374,7 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                                 
                                 // Models management
                                 <div>
-                                    <label class="block text-sm font-medium mb-2">{"Available Models"}</label>
+                                    <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">{"Available Models"}</label>
                                     <div class="space-y-2">
                                         {for provider.models.iter().enumerate().map(|(model_index, model)| {
                                             let remove_callback = on_remove_model.clone();
@@ -447,9 +447,9 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                 
                 // General Settings (same as before)
                 <div>
-                    <h3 class="font-medium mb-2">{"General Settings"}</h3>
+                    <h3 class="font-medium mb-2 text-gray-900 dark:text-gray-100">{"General Settings"}</h3>
                     <div class="mb-4">
-                        <label class="block text-sm font-medium mb-1" for="temperature">
+                        <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="temperature">
                             {format!("Temperature: {:.1}", config.shared_settings.temperature)}
                         </label>
                         <input 
@@ -464,7 +464,7 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                         />
                     </div>
                     <div class="mb-4">
-                        <label class="block text-sm font-medium mb-1" for="max-tokens">{"Max Tokens"}</label>
+                        <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="max-tokens">{"Max Tokens"}</label>
                         <input 
                             type="number" 
                             id="max-tokens" 
@@ -474,7 +474,7 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                         />
                     </div>
                     <div class="mb-4">
-                        <label class="block text-sm font-medium mb-1" for="retry-delay">{"Retry Delay (ms)"}</label>
+                        <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="retry-delay">{"Retry Delay (ms)"}</label>
                         <input 
                             type="number" 
                             id="retry-delay" 
@@ -487,7 +487,7 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                 
                 // System Prompt
                 <div>
-                    <h3 class="font-medium mb-2">{"System Prompt"}</h3>
+                    <h3 class="font-medium mb-2 text-gray-900 dark:text-gray-100">{"System Prompt"}</h3>
                     <textarea 
                         id="system-prompt" 
                         value={config.system_prompt.clone()}
@@ -500,7 +500,7 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                 // Function Tools
                 <div>
                     <div class="flex items-center justify-between mb-4">
-                        <h3 class="font-medium">{"Function Tools"}</h3>
+                        <h3 class="font-medium text-gray-900 dark:text-gray-100">{"Function Tools"}</h3>
                         <div class="flex items-center space-x-2">
                             <span class="text-sm text-gray-600 dark:text-gray-300">{"Editor:"}</span>
                             <button 

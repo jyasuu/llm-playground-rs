@@ -33,15 +33,15 @@ pub fn chat_header(props: &ChatHeaderProps) -> Html {
     };
 
     html! {
-        <div class="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+        <div class="p-4 border-b border-gray-200 dark:border-gray-600 flex justify-between items-center">
             <div>
-                <h2 class="font-semibold">{session_title}</h2>
-                <div class="text-sm text-gray-500 dark:text-gray-400">{model_info}</div>
+                <h2 class="font-semibold text-gray-900 dark:text-gray-100">{session_title}</h2>
+                <div class="text-sm text-gray-600 dark:text-gray-300">{model_info}</div>
             </div>
             <div class="flex space-x-2">
                 <button 
                     onclick={on_dark_mode_toggle}
-                    class="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
+                    class="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
                     title="Toggle dark mode"
                 >
                     {if props.dark_mode {
@@ -50,7 +50,7 @@ pub fn chat_header(props: &ChatHeaderProps) -> Html {
                         html! { <i class="fas fa-moon"></i> }
                     }}
                 </button>
-                <button class="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700">
+                <button class="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300">
                     <i class="fas fa-ellipsis-v"></i>
                 </button>
             </div>

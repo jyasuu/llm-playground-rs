@@ -31,18 +31,18 @@ pub fn sidebar(props: &SidebarProps) -> Html {
     };
 
     html! {
-        <div class="w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col">
+        <div class="w-64 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-600 flex flex-col">
             // Header
-            <div class="p-4 border-b border-gray-200 dark:border-gray-700">
-                <h1 class="text-xl font-bold">{"LLM Playground"}</h1>
-                <p class="text-sm text-gray-500 dark:text-gray-400">{"Local Storage Demo"}</p>
+            <div class="p-4 border-b border-gray-200 dark:border-gray-600">
+                <h1 class="text-xl font-bold text-gray-900 dark:text-gray-100">{"LLM Playground"}</h1>
+                <p class="text-sm text-gray-600 dark:text-gray-300">{"Local Storage Demo"}</p>
             </div>
             
             // Session List
             <div class="flex-1 overflow-y-auto custom-scrollbar">
                 <div class="p-4">
                     <div class="flex justify-between items-center mb-2">
-                        <h2 class="font-semibold">{"Sessions"}</h2>
+                        <h2 class="font-semibold text-gray-900 dark:text-gray-100">{"Sessions"}</h2>
                         <button 
                             onclick={new_session_click}
                             class="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
@@ -86,9 +86,9 @@ pub fn sidebar(props: &SidebarProps) -> Html {
                                         onclick={click_handler}
                                         class="p-2 cursor-pointer pr-8"
                                     >
-                                        <div class="font-medium truncate">{&session.title}</div>
+                                        <div class="font-medium truncate text-gray-900 dark:text-gray-100">{&session.title}</div>
                                         <div class="flex items-center justify-between">
-                                            <div class="text-xs text-gray-500 dark:text-gray-400">{time_ago}</div>
+                                            <div class="text-xs text-gray-600 dark:text-gray-300">{time_ago}</div>
                                             {if session.pinned {
                                                 html! { <i class="fas fa-thumbtack text-xs text-yellow-500"></i> }
                                             } else {
@@ -110,7 +110,7 @@ pub fn sidebar(props: &SidebarProps) -> Html {
                         })}
                         {if sessions_vec.is_empty() {
                             html! {
-                                <li class="p-4 text-center text-gray-500 dark:text-gray-400">
+                                <li class="p-4 text-center text-gray-600 dark:text-gray-300">
                                     <p>{"No sessions yet"}</p>
                                     <p class="text-sm">{"Click + to create one"}</p>
                                 </li>
@@ -123,10 +123,10 @@ pub fn sidebar(props: &SidebarProps) -> Html {
             </div>
             
             // Settings Button
-            <div class="p-4 border-t border-gray-200 dark:border-gray-700">
+            <div class="p-4 border-t border-gray-200 dark:border-gray-600">
                 <button 
                     onclick={on_settings_click}
-                    class="w-full py-2 px-4 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center"
+                    class="w-full py-2 px-4 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center text-gray-900 dark:text-gray-100"
                 >
                     <i class="fas fa-cog mr-2"></i> {"Settings"}
                 </button>
