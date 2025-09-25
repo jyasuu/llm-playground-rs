@@ -52,7 +52,7 @@ impl Default for FlexibleApiConfig {
             providers: vec![
                 ProviderConfig {
                     name: "openrouter".to_string(),
-                    api_base_url: "https://openrouter.ai/api/v1/chat/completions".to_string(),
+                    api_base_url: "https://openrouter.ai/api/v1".to_string(),
                     api_key: String::new(),
                     models: vec![
                         "deepseek/deepseek-chat-v3-0324:free".to_string(),
@@ -70,8 +70,11 @@ impl Default for FlexibleApiConfig {
                     models: vec![
                         "gemini-2.5-flash".to_string(),
                         "gemini-2.5-pro".to_string(),
+                        "gemini-2.5-flash-lite".to_string(),
                         "gemini-1.5-flash".to_string(),
                         "gemini-1.5-pro".to_string(),
+                        "gemini-2.0-flash".to_string(),
+                        "gemini-2.0-flash-lite".to_string(),
                     ],
                     transformer: TransformerConfig {
                         r#use: vec!["gemini".to_string()],
@@ -79,11 +82,16 @@ impl Default for FlexibleApiConfig {
                 },
                 ProviderConfig {
                     name: "gemini-openai".to_string(),
-                    api_base_url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions".to_string(),
+                    api_base_url: "https://generativelanguage.googleapis.com/v1beta/openai".to_string(),
                     api_key: String::new(),
                     models: vec![
                         "gemini-2.5-flash".to_string(),
                         "gemini-2.5-pro".to_string(),
+                        "gemini-2.5-flash-lite".to_string(),
+                        "gemini-1.5-flash".to_string(),
+                        "gemini-1.5-pro".to_string(),
+                        "gemini-2.0-flash".to_string(),
+                        "gemini-2.0-flash-lite".to_string(),
                     ],
                     transformer: TransformerConfig {
                         r#use: vec!["openai".to_string()],
@@ -91,7 +99,7 @@ impl Default for FlexibleApiConfig {
                 },
                 ProviderConfig {
                     name: "openai".to_string(),
-                    api_base_url: "https://api.openai.com/v1/chat/completions".to_string(),
+                    api_base_url: "https://api.openai.com/v1".to_string(),
                     api_key: String::new(),
                     models: vec![
                         "gpt-4o".to_string(),
@@ -105,7 +113,7 @@ impl Default for FlexibleApiConfig {
                 },
                 ProviderConfig {
                     name: "ollama".to_string(),
-                    api_base_url: "http://localhost:11434/v1/chat/completions".to_string(),
+                    api_base_url: "http://localhost:11434/v1".to_string(),
                     api_key: "ollama".to_string(), // Ollama doesn't need a real key
                     models: vec![
                         "llama3.2:latest".to_string(),
