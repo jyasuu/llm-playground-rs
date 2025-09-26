@@ -46,7 +46,7 @@ impl FlexibleLLMClient {
                     retry_delay: config.shared_settings.retry_delay,
                 },
                 system_prompt: config.system_prompt.clone(),
-                function_tools: config.function_tools.clone(),
+                function_tools: config.get_enabled_function_tools().into_iter().cloned().collect(),
                 structured_outputs: config.structured_outputs.clone(),
             }
         } else {
@@ -68,7 +68,7 @@ impl FlexibleLLMClient {
                     retry_delay: config.shared_settings.retry_delay,
                 },
                 system_prompt: config.system_prompt.clone(),
-                function_tools: config.function_tools.clone(),
+                function_tools: config.get_enabled_function_tools().into_iter().cloned().collect(),
                 structured_outputs: config.structured_outputs.clone(),
             }
         }

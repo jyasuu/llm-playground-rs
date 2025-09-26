@@ -237,6 +237,17 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
         })
     };
 
+    let toggle_function_tool = {
+        let config = config.clone();
+        Callback::from(move |index: usize| {
+            let mut new_config = (*config).clone();
+            if index < new_config.function_tools.len() {
+                new_config.function_tools[index].enabled = !new_config.function_tools[index].enabled;
+                config.set(new_config);
+            }
+        })
+    };
+
     let cancel_function_editor = {
         let show_function_editor = show_function_editor.clone();
         let editing_function_index = editing_function_index.clone();
@@ -527,6 +538,7 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                     {for config.function_tools.iter().enumerate().map(|(index, tool)| {
                         let edit_callback = edit_function_tool.clone();
                         let delete_callback = delete_function_tool.clone();
+                        let toggle_callback = toggle_function_tool.clone();
                         
                         let edit_click = {
                             let edit_callback = edit_callback.clone();
@@ -538,6 +550,11 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                             Callback::from(move |_| delete_callback.emit(index))
                         };
                         
+                        let toggle_click = {
+                            let toggle_callback = toggle_callback.clone();
+                            Callback::from(move |_| toggle_callback.emit(index))
+                        };
+                        
                         html! {
                             <div key={index} class="bg-gray-100 dark:bg-gray-700 p-4 rounded-md mb-3 border border-gray-200 dark:border-gray-600">
                                 <div class="flex items-start justify-between mb-2">
@@ -545,6 +562,18 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                                         <div class="flex items-center mb-1">
                                             <i class="fas fa-function text-purple-500 mr-2"></i>
                                             <span class="font-medium text-lg">{&tool.name}</span>
+                                            <span class={format!("ml-2 px-2 py-1 text-xs rounded-full {}", 
+                                                if tool.enabled { 
+                                                    "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400" 
+                                                } else { 
+                                                    "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400" 
+                                                }
+                                            )}>
+                                                {if tool.enabled { "Enabled" } else { "Disabled" }}
+                                            </span>
+                                            <span class="ml-2 px-2 py-1 text-xs rounded bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+                                                {&tool.category}
+                                            </span>
                                         </div>
                                         <p class="text-sm text-gray-600 dark:text-gray-300 mb-2">{&tool.description}</p>
                                         
@@ -564,6 +593,19 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                                         </div>
                                     </div>
                                     <div class="flex space-x-2 ml-4">
+                                        <button 
+                                            onclick={toggle_click}
+                                            class={format!("text-xs px-3 py-1 rounded hover:opacity-80 transition-colors {}", 
+                                                if tool.enabled { 
+                                                    "bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400" 
+                                                } else { 
+                                                    "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400" 
+                                                }
+                                            )}
+                                            title={if tool.enabled { "Disable tool" } else { "Enable tool" }}
+                                        >
+                                            <i class={if tool.enabled { "fas fa-toggle-on" } else { "fas fa-toggle-off" }}></i>
+                                        </button>
                                         <button 
                                             onclick={edit_click}
                                             class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded hover:bg-blue-200 dark:hover:bg-blue-900/50"

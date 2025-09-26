@@ -629,6 +629,8 @@ pub fn visual_function_tool_editor(props: &VisualFunctionToolEditorProps) -> Htm
                                     description: (*function_description).clone(),
                                     parameters: schema,
                                     mock_response: mock_response_json,
+                                    enabled: true,
+                                    category: "Custom".to_string(),
                                 };
                                 
                                 on_save.emit(tool);

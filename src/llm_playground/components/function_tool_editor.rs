@@ -21,6 +21,8 @@ pub fn function_tool_editor(props: &FunctionToolEditorProps) -> Html {
                 "required": []
             }),
             mock_response: String::from(r#"{"result": "Success"}"#),
+            enabled: true,
+            category: "Custom".to_string(),
         })
     });
 

@@ -279,13 +279,13 @@ impl OpenAIClient {
     }
 
     fn build_tools(&self, config: &ApiConfig) -> Option<Vec<serde_json::Value>> {
-        if config.function_tools.is_empty() {
+        let enabled_tools = config.get_enabled_function_tools();
+        if enabled_tools.is_empty() {
             return None;
         }
 
         Some(
-            config
-                .function_tools
+            enabled_tools
                 .iter()
                 .map(|tool| {
                     serde_json::json!({
@@ -885,6 +885,8 @@ mod tests {
                 }
             }),
             mock_response: "".to_string(),
+            enabled: true,
+            category: "Weather".to_string(),
         });
 
         let tools = client.build_tools(&config);

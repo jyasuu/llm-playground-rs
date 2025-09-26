@@ -227,13 +227,13 @@ impl GeminiClient {
     }
 
     fn build_tools(&self, config: &ApiConfig) -> Option<Vec<Tool>> {
-        if config.function_tools.is_empty() {
+        let enabled_tools = config.get_enabled_function_tools();
+        if enabled_tools.is_empty() {
             return None;
         }
 
         Some(vec![Tool {
-            function_declarations: config
-                .function_tools
+            function_declarations: enabled_tools
                 .iter()
                 .map(|tool| FunctionDeclaration {
                     name: tool.name.clone(),
@@ -703,6 +703,8 @@ mod tests {
                 }
             }),
             mock_response: "".to_string(),
+            enabled: true,
+            category: "Weather".to_string(),
         });
 
         let tools = client.build_tools(&config);

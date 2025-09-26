@@ -140,28 +140,7 @@ impl Default for FlexibleApiConfig {
                 retry_delay: 2000,
             },
             system_prompt: "You are a helpful assistant that responds in markdown format. Always be concise and to the point.".to_string(),
-            function_tools: vec![
-                FunctionTool {
-                    name: "get_weather".to_string(),
-                    description: "Retrieves weather data for a specified location.".to_string(),
-                    parameters: serde_json::json!({
-                        "type": "object",
-                        "properties": {
-                            "location": {
-                                "type": "string",
-                                "description": "The location to get weather for"
-                            },
-                            "unit": {
-                                "type": "string",
-                                "enum": ["celsius", "fahrenheit"],
-                                "description": "Temperature unit"
-                            }
-                        },
-                        "required": ["location"]
-                    }),
-                    mock_response: r#"{"temperature": 22, "condition": "sunny", "humidity": 65}"#.to_string(),
-                }
-            ],
+            function_tools: Self::get_default_function_tools(),
             structured_outputs: vec![],
             current_session_provider: None,
         }
@@ -223,5 +202,83 @@ impl FlexibleApiConfig {
         } else {
             false
         }
+    }
+
+    /// Get default function tools (reuse from ApiConfig)
+    pub fn get_default_function_tools() -> Vec<FunctionTool> {
+        // Delegate to ApiConfig implementation to avoid duplication
+        crate::llm_playground::types::ApiConfig::get_default_function_tools()
+    }
+
+    /// Toggle a function tool's enabled state
+    pub fn toggle_function_tool(&mut self, tool_name: &str) {
+        if let Some(tool) = self.function_tools.iter_mut().find(|t| t.name == tool_name) {
+            tool.enabled = !tool.enabled;
+        }
+    }
+
+    /// Get enabled function tools only
+    pub fn get_enabled_function_tools(&self) -> Vec<&FunctionTool> {
+        self.function_tools.iter().filter(|tool| tool.enabled).collect()
+    }
+
+    /// Get function tools by category
+    pub fn get_function_tools_by_category(&self, category: &str) -> Vec<&FunctionTool> {
+        self.function_tools.iter().filter(|tool| tool.category == category).collect()
+    }
+
+    /// Get all available categories
+    pub fn get_function_tool_categories(&self) -> Vec<String> {
+        let mut categories: Vec<String> = self.function_tools
+            .iter()
+            .map(|tool| tool.category.clone())
+            .collect::<std::collections::HashSet<_>>()
+            .into_iter()
+            .collect();
+        categories.sort();
+        categories
+    }
+
+    /// Add a new function tool
+    pub fn add_function_tool(&mut self, tool: FunctionTool) {
+        self.function_tools.push(tool);
+    }
+
+    /// Remove a function tool by name
+    pub fn remove_function_tool(&mut self, tool_name: &str) {
+        self.function_tools.retain(|tool| tool.name != tool_name);
+    }
+
+    /// Update a function tool's mock response
+    pub fn update_tool_mock_response(&mut self, tool_name: &str, mock_response: String) {
+        if let Some(tool) = self.function_tools.iter_mut().find(|t| t.name == tool_name) {
+            tool.mock_response = mock_response;
+        }
+    }
+
+    /// Enable all tools in a category
+    pub fn enable_category(&mut self, category: &str) {
+        for tool in self.function_tools.iter_mut() {
+            if tool.category == category {
+                tool.enabled = true;
+            }
+        }
+    }
+
+    /// Disable all tools in a category
+    pub fn disable_category(&mut self, category: &str) {
+        for tool in self.function_tools.iter_mut() {
+            if tool.category == category {
+                tool.enabled = false;
+            }
+        }
+    }
+
+    /// Get tool statistics
+    pub fn get_tool_stats(&self) -> (usize, usize, usize) {
+        let total = self.function_tools.len();
+        let enabled = self.function_tools.iter().filter(|t| t.enabled).count();
+        let categories = self.get_function_tool_categories().len();
+        (total, enabled, categories)
     }
 }
