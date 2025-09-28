@@ -6,6 +6,7 @@ pub mod types;
 pub mod provider_config;
 pub mod flexible_client;
 pub mod flexible_playground;
+pub mod builtin_tools;
 
 pub use components::*;
 pub use storage::*;
@@ -15,7 +16,6 @@ pub use provider_config::FlexibleApiConfig;
 pub use flexible_playground::FlexibleLLMPlayground;
 
 use yew::prelude::*;
-use gloo_storage::Storage;
 use std::collections::HashMap;
 use gloo_console::log;
 use crate::llm_playground::api_clients::{GeminiClient, OpenAIClient};

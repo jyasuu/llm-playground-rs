@@ -238,10 +238,37 @@ impl GeminiClient {
                 .map(|tool| FunctionDeclaration {
                     name: tool.name.clone(),
                     description: tool.description.clone(),
-                    parameters: tool.parameters.clone(),
+                    parameters: Self::clean_schema_for_gemini(&tool.parameters),
                 })
                 .collect(),
         }])
+    }
+
+    /// Clean JSON schema for Gemini API compatibility
+    /// Removes unsupported properties like $schema and additionalProperties
+    fn clean_schema_for_gemini(schema: &serde_json::Value) -> serde_json::Value {
+        match schema {
+            serde_json::Value::Object(obj) => {
+                let mut cleaned = serde_json::Map::new();
+                for (key, value) in obj {
+                    // Skip unsupported properties
+                    if key == "$schema" || key == "additionalProperties" {
+                        continue;
+                    }
+                    // Recursively clean nested objects
+                    cleaned.insert(key.clone(), Self::clean_schema_for_gemini(value));
+                }
+                serde_json::Value::Object(cleaned)
+            }
+            serde_json::Value::Array(arr) => {
+                serde_json::Value::Array(
+                    arr.iter()
+                        .map(|item| Self::clean_schema_for_gemini(item))
+                        .collect()
+                )
+            }
+            other => other.clone(),
+        }
     }
 }
 

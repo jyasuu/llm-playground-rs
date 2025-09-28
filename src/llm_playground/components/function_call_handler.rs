@@ -1,6 +1,9 @@
 use yew::prelude::*;
+use wasm_bindgen_futures;
+use gloo_console::log;
 use crate::llm_playground::{ApiConfig, FunctionTool};
 use crate::llm_playground::api_clients::{FunctionCallRequest, FunctionResponse};
+use crate::llm_playground::builtin_tools;
 
 #[derive(Properties, PartialEq)]
 pub struct FunctionCallHandlerProps {
@@ -31,26 +34,67 @@ pub fn function_call_handler(props: &FunctionCallHandlerProps) -> Html {
                 if auto_approve && !*executed {
                     executed.set(true);
                     
-                    // Find the mock response for this function
-                    let mock_response = config
+                    // Check if this is a built-in tool
+                    let tool = config
                         .function_tools
                         .iter()
-                        .find(|tool| tool.name == function_call.name)
-                        .map(|tool| tool.mock_response.clone())
-                        .unwrap_or_else(|| r#"{"result": "Function executed successfully"}"#.to_string());
+                        .find(|tool| tool.name == function_call.name);
                     
-                    // Parse the mock response as JSON
-                    let response_value = serde_json::from_str(&mock_response)
-                        .unwrap_or_else(|_| serde_json::json!({"result": mock_response}));
-                    
-                    let func_response = FunctionResponse {
-                        id: function_call.id.clone(),
-                        name: function_call.name.clone(),
-                        response: response_value,
-                    };
-                    
-                    response.set(Some(func_response.clone()));
-                    on_response.emit(func_response);
+                    if let Some(tool) = tool {
+                        if tool.is_builtin {
+                            // Execute built-in tool with real functionality
+                            log!("Executing built-in tool: {}", &function_call.name);
+                            let function_call_clone = function_call.clone();
+                            let on_response_clone = on_response.clone();
+                            let response_clone = response.clone();
+                            
+                            wasm_bindgen_futures::spawn_local(async move {
+                                match builtin_tools::execute_builtin_tool(&function_call_clone.name, &function_call_clone.arguments).await {
+                                    Ok(result) => {
+                                        let func_response = FunctionResponse {
+                                            id: function_call_clone.id.clone(),
+                                            name: function_call_clone.name.clone(),
+                                            response: result,
+                                        };
+                                        response_clone.set(Some(func_response.clone()));
+                                        on_response_clone.emit(func_response);
+                                    }
+                                    Err(error) => {
+                                        let func_response = FunctionResponse {
+                                            id: function_call_clone.id.clone(),
+                                            name: function_call_clone.name.clone(),
+                                            response: serde_json::json!({"error": error}),
+                                        };
+                                        response_clone.set(Some(func_response.clone()));
+                                        on_response_clone.emit(func_response);
+                                    }
+                                }
+                            });
+                        } else {
+                            // Use mock response for regular tools
+                            let mock_response = tool.mock_response.clone();
+                            let response_value = serde_json::from_str(&mock_response)
+                                .unwrap_or_else(|_| serde_json::json!({"result": mock_response}));
+                            
+                            let func_response = FunctionResponse {
+                                id: function_call.id.clone(),
+                                name: function_call.name.clone(),
+                                response: response_value,
+                            };
+                            
+                            response.set(Some(func_response.clone()));
+                            on_response.emit(func_response);
+                        }
+                    } else {
+                        // Unknown tool
+                        let func_response = FunctionResponse {
+                            id: function_call.id.clone(),
+                            name: function_call.name.clone(),
+                            response: serde_json::json!({"error": "Unknown function tool"}),
+                        };
+                        response.set(Some(func_response.clone()));
+                        on_response.emit(func_response);
+                    }
                 }
                 || ()
             },
@@ -69,26 +113,67 @@ pub fn function_call_handler(props: &FunctionCallHandlerProps) -> Html {
             pending_approval.set(false);
             executed.set(true);
             
-            // Find the mock response for this function
-            let mock_response = config
+            // Check if this is a built-in tool
+            let tool = config
                 .function_tools
                 .iter()
-                .find(|tool| tool.name == function_call.name)
-                .map(|tool| tool.mock_response.clone())
-                .unwrap_or_else(|| r#"{"result": "Function executed successfully"}"#.to_string());
+                .find(|tool| tool.name == function_call.name);
             
-            // Parse the mock response as JSON
-            let response_value = serde_json::from_str(&mock_response)
-                .unwrap_or_else(|_| serde_json::json!({"result": mock_response}));
-            
-            let func_response = FunctionResponse {
-                id: function_call.id.clone(),
-                name: function_call.name.clone(),
-                response: response_value,
-            };
-            
-            response.set(Some(func_response.clone()));
-            on_response.emit(func_response);
+            if let Some(tool) = tool {
+                if tool.is_builtin {
+                    // Execute built-in tool with real functionality
+                    log!("Executing built-in tool (manual approval): {}", &function_call.name);
+                    let function_call_clone = function_call.clone();
+                    let on_response_clone = on_response.clone();
+                    let response_clone = response.clone();
+                    
+                    wasm_bindgen_futures::spawn_local(async move {
+                        match builtin_tools::execute_builtin_tool(&function_call_clone.name, &function_call_clone.arguments).await {
+                            Ok(result) => {
+                                let func_response = FunctionResponse {
+                                    id: function_call_clone.id.clone(),
+                                    name: function_call_clone.name.clone(),
+                                    response: result,
+                                };
+                                response_clone.set(Some(func_response.clone()));
+                                on_response_clone.emit(func_response);
+                            }
+                            Err(error) => {
+                                let func_response = FunctionResponse {
+                                    id: function_call_clone.id.clone(),
+                                    name: function_call_clone.name.clone(),
+                                    response: serde_json::json!({"error": error}),
+                                };
+                                response_clone.set(Some(func_response.clone()));
+                                on_response_clone.emit(func_response);
+                            }
+                        }
+                    });
+                } else {
+                    // Use mock response for regular tools
+                    let mock_response = tool.mock_response.clone();
+                    let response_value = serde_json::from_str(&mock_response)
+                        .unwrap_or_else(|_| serde_json::json!({"result": mock_response}));
+                    
+                    let func_response = FunctionResponse {
+                        id: function_call.id.clone(),
+                        name: function_call.name.clone(),
+                        response: response_value,
+                    };
+                    
+                    response.set(Some(func_response.clone()));
+                    on_response.emit(func_response);
+                }
+            } else {
+                // Unknown tool
+                let func_response = FunctionResponse {
+                    id: function_call.id.clone(),
+                    name: function_call.name.clone(),
+                    response: serde_json::json!({"error": "Unknown function tool"}),
+                };
+                response.set(Some(func_response.clone()));
+                on_response.emit(func_response);
+            }
         })
     };
 

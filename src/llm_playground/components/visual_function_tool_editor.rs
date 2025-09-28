@@ -631,6 +631,7 @@ pub fn visual_function_tool_editor(props: &VisualFunctionToolEditorProps) -> Htm
                                     mock_response: mock_response_json,
                                     enabled: true,
                                     category: "Custom".to_string(),
+                                    is_builtin: false,
                                 };
                                 
                                 on_save.emit(tool);

@@ -23,6 +23,7 @@ pub fn function_tool_editor(props: &FunctionToolEditorProps) -> Html {
             mock_response: String::from(r#"{"result": "Success"}"#),
             enabled: true,
             category: "Custom".to_string(),
+            is_builtin: false,
         })
     });
 
@@ -119,6 +120,9 @@ pub fn function_tool_editor(props: &FunctionToolEditorProps) -> Html {
         && serde_json::from_str::<serde_json::Value>(&parameters_text).is_ok()
         && serde_json::from_str::<serde_json::Value>(&tool.mock_response).is_ok();
 
+    // Check if this is a built-in tool (read-only)
+    let is_builtin = tool.is_builtin;
+
     html! {
         <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
             <div class="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-2xl max-h-[80vh] overflow-y-auto">
@@ -134,6 +138,21 @@ pub fn function_tool_editor(props: &FunctionToolEditorProps) -> Html {
                     </button>
                 </div>
 
+                {if is_builtin {
+                    html! {
+                        <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-md p-3 mb-4">
+                            <div class="flex items-center space-x-2">
+                                <i class="fas fa-info-circle text-blue-600 dark:text-blue-400"></i>
+                                <span class="text-sm text-blue-800 dark:text-blue-200 font-medium">
+                                    {"This is a built-in function tool. It cannot be edited or deleted, but can be enabled/disabled."}
+                                </span>
+                            </div>
+                        </div>
+                    }
+                } else {
+                    html! {}
+                }}
+
                 <div class="space-y-4">
                     <div>
                         <label class="block text-sm font-medium mb-1">{"Function Name"}</label>
@@ -142,7 +161,9 @@ pub fn function_tool_editor(props: &FunctionToolEditorProps) -> Html {
                             value={tool.name.clone()}
                             oninput={on_name_change}
                             placeholder="e.g., get_weather"
-                            class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700"
+                            disabled={is_builtin}
+                            class={format!("w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 {}", 
+                                if is_builtin { "opacity-50 cursor-not-allowed" } else { "" })}
                         />
                     </div>
 
@@ -153,7 +174,9 @@ pub fn function_tool_editor(props: &FunctionToolEditorProps) -> Html {
                             oninput={on_description_change}
                             placeholder="What does this function do?"
                             rows="2"
-                            class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700"
+                            disabled={is_builtin}
+                            class={format!("w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 {}", 
+                                if is_builtin { "opacity-50 cursor-not-allowed" } else { "" })}
                         />
                     </div>
 

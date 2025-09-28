@@ -358,17 +358,28 @@ pub fn flexible_llm_playground() -> Html {
                                     
                                     // Execute each function call and add responses
                                     for function_call in &response.function_calls {
-                                        // Find mock response from config
-                                        let mock_response = config
+                                        // Check if this is a built-in tool and execute it properly
+                                        let response_value = if let Some(tool) = config
                                             .function_tools
                                             .iter()
-                                            .find(|tool| tool.name == function_call.name)
-                                            .map(|tool| tool.mock_response.clone())
-                                            .unwrap_or_else(|| r#"{"result": "Function executed successfully"}"#.to_string());
-                                        
-                                        // Parse mock response as JSON
-                                        let response_value = serde_json::from_str(&mock_response)
-                                            .unwrap_or_else(|_| serde_json::json!({"result": mock_response}));
+                                            .find(|tool| tool.name == function_call.name) {
+                                            
+                                            if tool.is_builtin {
+                                                // Execute built-in tool with real functionality
+                                                log!("Executing built-in tool: {}", &function_call.name);
+                                                match crate::llm_playground::builtin_tools::execute_builtin_tool(&function_call.name, &function_call.arguments).await {
+                                                    Ok(result) => result,
+                                                    Err(error) => serde_json::json!({"error": error}),
+                                                }
+                                            } else {
+                                                // Use mock response for regular tools
+                                                serde_json::from_str(&tool.mock_response)
+                                                    .unwrap_or_else(|_| serde_json::json!({"result": tool.mock_response.clone()}))
+                                            }
+                                        } else {
+                                            // Unknown tool
+                                            serde_json::json!({"error": "Unknown function tool"})
+                                        };
                                         
                                         // Add function response message to conversation
                                         let function_response_message = Message {

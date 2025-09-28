@@ -442,12 +442,31 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
                         };
                         
                         html! {
-                            <div key={index} class="bg-gray-100 dark:bg-gray-700 p-4 rounded-md mb-3 border border-gray-200 dark:border-gray-600">
+                            <div key={index} class={format!("p-4 rounded-md mb-3 border {}",
+                                if tool.is_builtin {
+                                    "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700"
+                                } else {
+                                    "bg-gray-100 dark:bg-gray-700 border-gray-200 dark:border-gray-600"
+                                }
+                            )}>
                                 <div class="flex items-start justify-between mb-2">
                                     <div class="flex-1">
                                         <div class="flex items-center mb-1">
-                                            <i class="fas fa-function text-purple-500 mr-2"></i>
+                                            {if tool.is_builtin {
+                                                html! { <i class="fas fa-cog text-blue-500 mr-2" title="Built-in tool"></i> }
+                                            } else {
+                                                html! { <i class="fas fa-function text-purple-500 mr-2"></i> }
+                                            }}
                                             <span class="font-medium text-lg">{&tool.name}</span>
+                                            {if tool.is_builtin {
+                                                html! {
+                                                    <span class="ml-2 px-2 py-1 text-xs bg-blue-100 dark:bg-blue-800 text-blue-600 dark:text-blue-200 rounded-full">
+                                                        {"Built-in"}
+                                                    </span>
+                                                }
+                                            } else {
+                                                html! {}
+                                            }}
                                         </div>
                                         <p class="text-sm text-gray-600 dark:text-gray-300 mb-2">{&tool.description}</p>
                                         
@@ -467,20 +486,33 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
                                         </div>
                                     </div>
                                     <div class="flex space-x-2 ml-4">
-                                        <button 
-                                            onclick={edit_click}
-                                            class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded hover:bg-blue-200 dark:hover:bg-blue-900/50"
-                                            title="Edit function"
-                                        >
-                                            <i class="fas fa-edit"></i>
-                                        </button>
-                                        <button 
-                                            onclick={delete_click}
-                                            class="text-xs px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded hover:bg-red-200 dark:hover:bg-red-900/50"
-                                            title="Delete function"
-                                        >
-                                            <i class="fas fa-trash"></i>
-                                        </button>
+                                        {if tool.is_builtin {
+                                            html! {
+                                                <div class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded">
+                                                    <i class="fas fa-lock mr-1"></i>
+                                                    {"Protected"}
+                                                </div>
+                                            }
+                                        } else {
+                                            html! {
+                                                <>
+                                                    <button 
+                                                        onclick={edit_click}
+                                                        class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded hover:bg-blue-200 dark:hover:bg-blue-900/50"
+                                                        title="Edit function"
+                                                    >
+                                                        <i class="fas fa-edit"></i>
+                                                    </button>
+                                                    <button 
+                                                        onclick={delete_click}
+                                                        class="text-xs px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded hover:bg-red-200 dark:hover:bg-red-900/50"
+                                                        title="Delete function"
+                                                    >
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </>
+                                            }
+                                        }}
                                     </div>
                                 </div>
                             </div>

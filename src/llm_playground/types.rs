@@ -46,6 +46,7 @@ pub struct FunctionTool {
     pub mock_response: String,
     pub enabled: bool,
     pub category: String,
+    pub is_builtin: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -111,6 +112,38 @@ impl ApiConfig {
     /// Get default function tools with all tools from the specification
     pub fn get_default_function_tools() -> Vec<FunctionTool> {
         vec![
+            // Built-in Fetch Tool
+            FunctionTool {
+                name: "fetch".to_string(),
+                description: "A tool for making HTTP requests. Supports GET, POST, PUT, DELETE, and other HTTP methods with custom headers and payload.".to_string(),
+                parameters: serde_json::json!({
+                    "type": "object",
+                    "properties": {
+                        "url": {
+                            "type": "string",
+                            "description": "The URL to make the request to"
+                        },
+                        "method": {
+                            "type": "string",
+                            "description": "HTTP method to use (GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS)"
+                        },
+                        "headers": {
+                            "type": "object",
+                            "description": "HTTP headers to include in the request"
+                        },
+                        "payload": {
+                            "type": "string",
+                            "description": "Request body payload (for POST, PUT, PATCH methods)"
+                        }
+                    },
+                    "required": ["url"]
+                }),
+                mock_response: r#"{"status": 200, "headers": {"content-type": "application/json"}, "body": "{\"message\": \"success\"}"}"#.to_string(),
+                enabled: true,
+                category: "HTTP".to_string(),
+                is_builtin: true,
+            },
+
             // Task Agent Tool
             FunctionTool {
                 name: "Task".to_string(),
@@ -138,6 +171,7 @@ impl ApiConfig {
                 mock_response: r#"{"task_id": "task_123", "status": "created", "agent_type": "general-purpose", "description": "Search for code"}"#.to_string(),
                 enabled: true,
                 category: "Agent".to_string(),
+                is_builtin: false,
             },
 
             // Bash Tool
@@ -167,6 +201,7 @@ impl ApiConfig {
                 mock_response: r#"{"stdout": "total 12\ndrwxr-xr-x 3 user user 4096 Jan 1 12:00 src\n-rw-r--r-- 1 user user 1234 Jan 1 12:00 Cargo.toml", "stderr": "", "exit_code": 0}"#.to_string(),
                 enabled: true,
                 category: "System".to_string(),
+                is_builtin: false,
             },
 
             // Glob Tool
@@ -192,6 +227,7 @@ impl ApiConfig {
                 mock_response: r#"{"files": ["src/main.rs", "src/lib.rs", "tests/integration.rs"], "count": 3}"#.to_string(),
                 enabled: true,
                 category: "File System".to_string(),
+                is_builtin: false,
             },
 
             // Grep Tool
@@ -258,6 +294,7 @@ impl ApiConfig {
                 mock_response: r#"{"matches": [{"file": "src/main.rs", "line": 42, "content": "fn main() {"}], "total_matches": 1}"#.to_string(),
                 enabled: true,
                 category: "Search".to_string(),
+                is_builtin: false,
             },
 
             // LS Tool
@@ -286,6 +323,7 @@ impl ApiConfig {
                 mock_response: r#"{"entries": [{"name": "src", "type": "directory", "size": 4096}, {"name": "Cargo.toml", "type": "file", "size": 1234}]}"#.to_string(),
                 enabled: true,
                 category: "File System".to_string(),
+                is_builtin: false,
             },
 
             // Read Tool
@@ -315,6 +353,7 @@ impl ApiConfig {
                 mock_response: r#"{"content": "use std::collections::HashMap;\n\nfn main() {\n    println!(\"Hello, world!\");\n}", "lines": 4, "truncated": false}"#.to_string(),
                 enabled: true,
                 category: "File System".to_string(),
+                is_builtin: false,
             },
 
             // Edit Tool
@@ -349,6 +388,7 @@ impl ApiConfig {
                 mock_response: r#"{"success": true, "replacements": 1, "file": "/path/to/file.rs"}"#.to_string(),
                 enabled: true,
                 category: "File System".to_string(),
+                is_builtin: false,
             },
 
             // Write Tool
@@ -374,6 +414,7 @@ impl ApiConfig {
                 mock_response: r#"{"success": true, "bytes_written": 1234, "file": "/path/to/file.rs"}"#.to_string(),
                 enabled: true,
                 category: "File System".to_string(),
+                is_builtin: false,
             },
 
             // MultiEdit Tool
@@ -420,6 +461,7 @@ impl ApiConfig {
                 mock_response: r#"{"success": true, "total_edits": 3, "file": "/path/to/file.rs"}"#.to_string(),
                 enabled: true,
                 category: "File System".to_string(),
+                is_builtin: false,
             },
 
             // ExitPlanMode Tool
@@ -441,6 +483,7 @@ impl ApiConfig {
                 mock_response: r#"{"status": "plan_submitted", "message": "Plan presented to user for approval"}"#.to_string(),
                 enabled: false,
                 category: "Planning".to_string(),
+                is_builtin: false,
             },
 
             // TodoWrite Tool
@@ -484,6 +527,7 @@ impl ApiConfig {
                 mock_response: r#"{"status": "updated", "total_todos": 5, "completed": 2, "pending": 3}"#.to_string(),
                 enabled: false,
                 category: "Planning".to_string(),
+                is_builtin: false,
             },
 
             // WebFetch Tool
@@ -510,6 +554,7 @@ impl ApiConfig {
                 mock_response: "{\"title\": \"Example Page\", \"content\": \"# Example\\n\\nThis is example content from the webpage.\", \"summary\": \"A webpage about examples\"}".to_string(),
                 enabled: true,
                 category: "Web".to_string(),
+                is_builtin: false,
             },
 
             // WebSearch Tool
@@ -546,6 +591,7 @@ impl ApiConfig {
                 mock_response: r#"{"results": [{"title": "Rust Programming Language", "url": "https://rust-lang.org", "snippet": "A systems programming language..."}], "total": 1}"#.to_string(),
                 enabled: true,
                 category: "Web".to_string(),
+                is_builtin: false,
             },
 
             // NotebookEdit Tool
@@ -585,6 +631,7 @@ impl ApiConfig {
                 mock_response: r#"{"success": true, "cell_id": "abc123", "edit_mode": "replace", "notebook": "/path/to/notebook.ipynb"}"#.to_string(),
                 enabled: false,
                 category: "IDE".to_string(),
+                is_builtin: false,
             },
 
             // Weather Tool (Enhanced)
@@ -611,6 +658,7 @@ impl ApiConfig {
                 mock_response: r#"{"temperature": 22, "condition": "sunny", "humidity": 65, "wind_speed": 5, "location": "San Francisco, CA"}"#.to_string(),
                 enabled: true,
                 category: "Weather".to_string(),
+                is_builtin: false,
             },
 
             // IDE Diagnostics Tool
@@ -631,6 +679,7 @@ impl ApiConfig {
                 mock_response: r#"{"diagnostics": [{"file": "src/main.rs", "line": 42, "severity": "error", "message": "cannot find value `x` in this scope"}]}"#.to_string(),
                 enabled: false,
                 category: "IDE".to_string(),
+                is_builtin: false,
             },
 
             // Execute Code Tool
@@ -652,6 +701,7 @@ impl ApiConfig {
                 mock_response: r#"{"output": "Hello, World!\n", "execution_count": 1, "status": "ok"}"#.to_string(),
                 enabled: false,
                 category: "IDE".to_string(),
+                is_builtin: false,
             },
         ]
     }
