@@ -44,7 +44,7 @@ pub fn message_bubble(props: &MessageBubbleProps) -> Html {
                 <div class="font-medium mb-1 text-gray-900 dark:text-gray-100">{label}</div>
                 
                 // Regular message content
-                <div class="message-content text-sm">
+                <div class="message-content text-sm text-gray-800 dark:text-gray-200">
                     {render_content(&props.message.content)}
                 </div>
                 
@@ -322,8 +322,8 @@ fn render_line(line: &str) -> Html {
     if line.starts_with("- ") {
         return html! {
             <div class="flex items-start space-x-2 ml-4">
-                <span class="text-gray-500 mt-1">{"•"}</span>
-                <span>{render_inline_formatting(&line[2..])}</span>
+                <span class="text-gray-500 dark:text-gray-400 mt-1">{"•"}</span>
+                <span class="text-gray-800 dark:text-gray-200">{render_inline_formatting(&line[2..])}</span>
             </div>
         };
     }

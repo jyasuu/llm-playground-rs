@@ -202,7 +202,7 @@ pub fn visual_function_tool_editor(props: &VisualFunctionToolEditorProps) -> Htm
             <div class="bg-white dark:bg-gray-800 rounded-lg w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
                 // Header
                 <div class="flex justify-between items-center p-6 border-b border-gray-200 dark:border-gray-700">
-                    <h3 class="text-xl font-semibold">
+                    <h3 class="text-xl font-semibold text-gray-900 dark:text-gray-100">
                         {if props.tool.is_some() { "Edit Function Tool" } else { "Create Function Tool" }}
                     </h3>
                     <button 
@@ -220,14 +220,14 @@ pub fn visual_function_tool_editor(props: &VisualFunctionToolEditorProps) -> Htm
                 <div class="flex-1 overflow-y-auto p-6 space-y-6">
                     // Basic Information Section
                     <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                        <h4 class="text-lg font-medium mb-4 flex items-center">
+                        <h4 class="text-lg font-medium mb-4 flex items-center text-gray-900 dark:text-gray-100">
                             <i class="fas fa-info-circle text-blue-500 mr-2"></i>
                             {"Basic Information"}
                         </h4>
                         
                         <div class="grid grid-cols-1 gap-4">
                             <div>
-                                <label class="block text-sm font-medium mb-2">{"Function Name"}</label>
+                                <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">{"Function Name"}</label>
                                 <input 
                                     type="text"
                                     value={(*function_name).clone()}
@@ -239,13 +239,13 @@ pub fn visual_function_tool_editor(props: &VisualFunctionToolEditorProps) -> Htm
                                         })
                                     }
                                     placeholder="e.g., get_weather, calculate_price, send_email"
-                                    class="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800"
+                                    class="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
                                 />
-                                <p class="text-xs text-gray-500 mt-1">{"Use lowercase with underscores, like: get_weather"}</p>
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{"Use lowercase with underscores, like: get_weather"}</p>
                             </div>
                             
                             <div>
-                                <label class="block text-sm font-medium mb-2">{"Description"}</label>
+                                <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">{"Description"}</label>
                                 <textarea 
                                     value={(*function_description).clone()}
                                     oninput={
@@ -257,16 +257,16 @@ pub fn visual_function_tool_editor(props: &VisualFunctionToolEditorProps) -> Htm
                                     }
                                     placeholder="Describe what this function does and when to use it"
                                     rows="3"
-                                    class="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800"
+                                    class="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
                                 />
-                                <p class="text-xs text-gray-500 mt-1">{"Be specific about what the function does and when the AI should use it"}</p>
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{"Be specific about what the function does and when the AI should use it"}</p>
                             </div>
                         </div>
                     </div>
 
                     // Parameters Section
                     <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                        <h4 class="text-lg font-medium mb-4 flex items-center">
+                        <h4 class="text-lg font-medium mb-4 flex items-center text-gray-900 dark:text-gray-100">
                             <i class="fas fa-cog text-green-500 mr-2"></i>
                             {"Parameters"}
                         </h4>
@@ -286,7 +286,7 @@ pub fn visual_function_tool_editor(props: &VisualFunctionToolEditorProps) -> Htm
                                 html! {
                                     <div key={index} class="border border-gray-200 dark:border-gray-600 rounded-md p-4 bg-white dark:bg-gray-800">
                                         <div class="flex justify-between items-start mb-3">
-                                            <h5 class="font-medium">{"Parameter " }{index + 1}</h5>
+                                            <h5 class="font-medium text-gray-900 dark:text-gray-100">{"Parameter " }{index + 1}</h5>
                                             <button 
                                                 onclick={delete_param}
                                                 class="text-red-500 hover:text-red-700 text-sm"
@@ -298,7 +298,7 @@ pub fn visual_function_tool_editor(props: &VisualFunctionToolEditorProps) -> Htm
                                         
                                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             <div>
-                                                <label class="block text-sm font-medium mb-1">{"Name"}</label>
+                                                <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">{"Name"}</label>
                                                 <input 
                                                     type="text"
                                                     value={param.name.clone()}
@@ -312,12 +312,12 @@ pub fn visual_function_tool_editor(props: &VisualFunctionToolEditorProps) -> Htm
                                                         })
                                                     }
                                                     placeholder="parameter_name"
-                                                    class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-sm"
+                                                    class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-sm text-gray-900 dark:text-gray-100"
                                                 />
                                             </div>
                                             
                                             <div>
-                                                <label class="block text-sm font-medium mb-1">{"Type"}</label>
+                                                <label class="block text-sm font-medium mb-1 text-gray-900 dark:text-gray-100">{"Type"}</label>
                                                 <select 
                                                     value={param.param_type.clone()}
                                                     onchange={
@@ -329,7 +329,7 @@ pub fn visual_function_tool_editor(props: &VisualFunctionToolEditorProps) -> Htm
                                                             parameters.set(new_params);
                                                         })
                                                     }
-                                                    class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-sm"
+                                                    class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-sm text-gray-900 dark:text-gray-100"
                                                 >
                                                     <option value="string">{"Text (string)"}</option>
                                                     <option value="number">{"Number"}</option>
@@ -339,7 +339,7 @@ pub fn visual_function_tool_editor(props: &VisualFunctionToolEditorProps) -> Htm
                                             </div>
                                             
                                             <div class="md:col-span-2">
-                                                <label class="block text-sm font-medium mb-1">{"Description"}</label>
+                                                <label class="block text-sm font-medium mb-1 text-gray-900 dark:text-gray-100">{"Description"}</label>
                                                 <input 
                                                     type="text"
                                                     value={param.description.clone()}
@@ -353,7 +353,7 @@ pub fn visual_function_tool_editor(props: &VisualFunctionToolEditorProps) -> Htm
                                                         })
                                                     }
                                                     placeholder="Describe what this parameter is for"
-                                                    class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-sm"
+                                                    class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-sm text-gray-900 dark:text-gray-100"
                                                 />
                                             </div>
                                             
@@ -373,7 +373,7 @@ pub fn visual_function_tool_editor(props: &VisualFunctionToolEditorProps) -> Htm
                                                         }
                                                         class="mr-2"
                                                     />
-                                                    <span class="text-sm">{"Required parameter"}</span>
+                                                    <span class="text-sm text-gray-900 dark:text-gray-100">{"Required parameter"}</span>
                                                 </label>
                                             </div>
                                         </div>
@@ -399,7 +399,7 @@ pub fn visual_function_tool_editor(props: &VisualFunctionToolEditorProps) -> Htm
 
                     // Mock Response Section
                     <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
-                        <h4 class="text-lg font-medium mb-4 flex items-center">
+                        <h4 class="text-lg font-medium mb-4 flex items-centertext-gray-900 dark:text-gray-100">
                             <i class="fas fa-reply text-purple-500 mr-2"></i>
                             {"Mock Response"}
                         </h4>
@@ -422,7 +422,7 @@ pub fn visual_function_tool_editor(props: &VisualFunctionToolEditorProps) -> Htm
                                 };
 
                                 html! {
-                                    <div key={index} class="border border-gray-200 dark:border-gray-600 rounded-md p-4 bg-white dark:bg-gray-800">
+                                    <div key={index} class="border border-gray-200 dark:border-gray-600 rounded-md p-4 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
                                         <div class="flex justify-between items-start mb-3">
                                             <h5 class="font-medium">{"Field " }{index + 1}</h5>
                                             {if mock_fields.len() > 1 {
@@ -546,7 +546,7 @@ pub fn visual_function_tool_editor(props: &VisualFunctionToolEditorProps) -> Htm
                     // JSON Preview Section (Optional Toggle)
                     <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
                         <div class="flex items-center justify-between mb-4">
-                            <h4 class="text-lg font-medium flex items-center">
+                            <h4 class="text-lg font-medium flex items-centertext-gray-900 dark:text-gray-100">
                                 <i class="fas fa-code text-gray-500 mr-2"></i>
                                 {"JSON Preview"}
                             </h4>

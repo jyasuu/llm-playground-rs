@@ -59,6 +59,20 @@ pub fn flexible_llm_playground() -> Html {
             // Load dark mode
             if let Ok(dark) = LocalStorage::get::<bool>(STORAGE_KEY_DARK_MODE) {
                 dark_mode.set(dark);
+                
+                // Apply dark mode class immediately on load
+                if let Some(window) = web_sys::window() {
+                    if let Some(document) = window.document() {
+                        if let Some(html_element) = document.document_element() {
+                            let class_list = html_element.class_list();
+                            if dark {
+                                let _ = class_list.add_1("dark");
+                            } else {
+                                let _ = class_list.remove_1("dark");
+                            }
+                        }
+                    }
+                }
             }
             
             || ()
@@ -100,6 +114,20 @@ pub fn flexible_llm_playground() -> Html {
         let dark_mode = dark_mode.clone();
         use_effect_with(dark_mode.clone(), move |dark| {
             let _ = LocalStorage::set(STORAGE_KEY_DARK_MODE, **dark);
+            
+            // Apply dark mode class to document
+            if let Some(window) = web_sys::window() {
+                if let Some(document) = window.document() {
+                    if let Some(html_element) = document.document_element() {
+                        let class_list = html_element.class_list();
+                        if **dark {
+                            let _ = class_list.add_1("dark");
+                        } else {
+                            let _ = class_list.remove_1("dark");
+                        }
+                    }
+                }
+            }
             || ()
         });
     }
@@ -354,6 +382,7 @@ pub fn flexible_llm_playground() -> Html {
                                             session.messages.push(assistant_message);
                                             session.updated_at = js_sys::Date::now();
                                         }
+                                        sessions.set(new_sessions.clone());
                                     }
                                     
                                     // Execute each function call and add responses
@@ -402,6 +431,7 @@ pub fn flexible_llm_playground() -> Html {
                                                 session.messages.push(function_response_message);
                                                 session.updated_at = js_sys::Date::now();
                                             }
+                                            sessions.set(new_sessions.clone());
                                         }
                                         
                                         // Get the call number for this function

@@ -279,7 +279,7 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
                                     id="gemini-key" 
                                     value={config.gemini.api_key.clone()}
                                     oninput={on_gemini_key_change}
-                                    class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700" 
+                                    class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" 
                                     placeholder="Enter your Gemini API key"
                                 />
                             </div>
@@ -289,7 +289,7 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
                                     id="gemini-model" 
                                     value={config.gemini.model.clone()}
                                     onchange={on_gemini_model_change}
-                                    class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700"
+                                    class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                                 >
                                     <option value="gemini-2.5-flash-lite-preview-06-17">{"Gemini 2.5 Flash (Experimental)"}</option>
                                     <option value="gemini-1.5-pro">{"Gemini 1.5 Pro"}</option>
@@ -308,34 +308,34 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
                     html! {
                         <div>
                             <div class="mb-4">
-                                <label class="block text-sm font-medium mb-1" for="openai-url">{"API URL"}</label>
+                                <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="openai-url">{"API URL"}</label>
                                 <input 
                                     type="text" 
                                     id="openai-url" 
                                     value={config.openai.base_url.clone()}
                                     oninput={on_openai_url_change}
-                                    class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700" 
+                                    class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" 
                                     placeholder="https://api.openai.com/v1"
                                 />
                             </div>
                             <div class="mb-4">
-                                <label class="block text-sm font-medium mb-1" for="openai-key">{"API Key"}</label>
+                                <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="openai-key">{"API Key"}</label>
                                 <input 
                                     type="password" 
                                     id="openai-key" 
                                     value={config.openai.api_key.clone()}
                                     oninput={on_openai_key_change}
-                                    class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700" 
+                                    class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" 
                                     placeholder="Enter your API key"
                                 />
                             </div>
                             <div class="mb-4">
-                                <label class="block text-sm font-medium mb-1" for="openai-model">{"Model"}</label>
+                                <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="openai-model">{"Model"}</label>
                                 <select 
                                     id="openai-model" 
                                     value={config.openai.model.clone()}
                                     onchange={on_openai_model_change}
-                                    class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700"
+                                    class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                                 >
                                     <option value="gpt-4o">{"GPT-4o"}</option>
                                     <option value="gpt-4-turbo">{"GPT-4 Turbo"}</option>
@@ -373,7 +373,7 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
                             id="max-tokens" 
                             value={config.shared_settings.max_tokens.to_string()}
                             oninput={on_max_tokens_change}
-                            class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700"
+                            class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                         />
                     </div>
                     <div class="mb-4">
@@ -383,7 +383,7 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
                             id="retry-delay" 
                             value={config.shared_settings.retry_delay.to_string()}
                             oninput={on_retry_delay_change}
-                            class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700"
+                            class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                         />
                     </div>
                 </div>
@@ -395,7 +395,7 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
                         id="system-prompt" 
                         value={config.system_prompt.clone()}
                         oninput={on_system_prompt_change}
-                        class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 h-32" 
+                        class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 h-32" 
                         placeholder="Enter system prompt"
                     />
                 </div>
@@ -457,7 +457,7 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
                                             } else {
                                                 html! { <i class="fas fa-function text-purple-500 mr-2"></i> }
                                             }}
-                                            <span class="font-medium text-lg">{&tool.name}</span>
+                                            <span class="font-medium text-lg text-gray-900 dark:text-gray-100">{&tool.name}</span>
                                             {if tool.is_builtin {
                                                 html! {
                                                     <span class="ml-2 px-2 py-1 text-xs bg-blue-100 dark:bg-blue-800 text-blue-600 dark:text-blue-200 rounded-full">

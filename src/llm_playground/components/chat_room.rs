@@ -53,7 +53,7 @@ pub fn chat_room(props: &ChatRoomProps) -> Html {
                                             <i class="fas fa-robot text-purple-600 dark:text-purple-400"></i>
                                         </div>
                                         <div class="flex-1 bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                                            <div class="font-medium mb-1">{"Assistant"}</div>
+                                            <div class="font-medium mb-1 text-gray-900 dark:text-gray-100">{"Assistant"}</div>
                                             <div class="flex items-center space-x-2">
                                                 <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600"></div>
                                                 <span class="text-sm text-gray-500 dark:text-gray-400">{"Thinking..."}</span>
@@ -71,8 +71,8 @@ pub fn chat_room(props: &ChatRoomProps) -> Html {
                         <div class="flex items-center justify-center h-full">
                             <div class="text-center text-gray-500 dark:text-gray-400">
                                 <i class="fas fa-comments text-4xl mb-4"></i>
-                                <h3 class="text-lg font-medium mb-2">{"Welcome to LLM Playground"}</h3>
-                                <p>{"Select a session from the sidebar or create a new one to start chatting."}</p>
+                                <h3 class="text-lg font-medium mb-2 text-gray-900 dark:text-gray-100">{"Welcome to LLM Playground"}</h3>
+                                <p class="text-gray-600 dark:text-gray-300">{"Select a session from the sidebar or create a new one to start chatting."}</p>
                             </div>
                         </div>
                     }

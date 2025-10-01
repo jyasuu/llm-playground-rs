@@ -266,7 +266,7 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                     <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">{"Settings"}</h2>
                     <button 
                         onclick={on_close}
-                        class="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
+                        class="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-900 dark:text-gray-100"
                     >
                         <i class="fas fa-times"></i>
                     </button>
@@ -309,7 +309,7 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                         <select 
                             value={selected_provider_index.to_string()}
                             onchange={on_provider_select}
-                            class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700"
+                            class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                         >
                             {for config.providers.iter().enumerate().map(|(index, provider)| {
                                 html! {
@@ -337,7 +337,7 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                                                 callback.emit(("name".to_string(), input.value()));
                                             })
                                         }
-                                        class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700"
+                                        class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                                     />
                                 </div>
                                 
@@ -353,7 +353,7 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                                                 callback.emit(("api_base_url".to_string(), input.value()));
                                             })
                                         }
-                                        class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700"
+                                        class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                                         placeholder="https://api.example.com/v1/chat/completions"
                                     />
                                 </div>
@@ -391,12 +391,12 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                                             let remove_callback = on_remove_model.clone();
                                             html! {
                                                 <div key={model_index} class="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-600 rounded">
-                                                    <span class="text-sm">{model}</span>
+                                                    <span class="text-sm text-gray-900 dark:text-gray-100">{model}</span>
                                                     <button 
                                                         onclick={
                                                             Callback::from(move |_| remove_callback.emit(model_index))
                                                         }
-                                                        class="text-xs px-1 py-0.5 text-red-600 hover:text-red-800"
+                                                        class="text-xs px-1 py-0.5 text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
                                                     >
                                                         <i class="fas fa-times"></i>
                                                     </button>
@@ -409,7 +409,7 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                                             <input 
                                                 type="text" 
                                                 id={format!("new-model-{}", *selected_provider_index)}
-                                                class="flex-1 p-2 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700"
+                                                class="flex-1 p-2 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                                                 placeholder="Add new model..."
                                                 onkeypress={
                                                     let add_callback = on_add_model.clone();
@@ -442,7 +442,7 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                                                         }
                                                     })
                                                 }
-                                                class="px-3 py-2 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
+                                                class="px-3 py-2 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded"
                                             >
                                                 <i class="fas fa-plus"></i>
                                             </button>
@@ -481,7 +481,7 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                             id="max-tokens" 
                             value={config.shared_settings.max_tokens.to_string()}
                             oninput={on_max_tokens_change}
-                            class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700"
+                            class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                         />
                     </div>
                     <div class="mb-4">
@@ -491,7 +491,7 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                             id="retry-delay" 
                             value={config.shared_settings.retry_delay.to_string()}
                             oninput={on_retry_delay_change}
-                            class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700"
+                            class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                         />
                     </div>
                 </div>
@@ -503,7 +503,7 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                         id="system-prompt" 
                         value={config.system_prompt.clone()}
                         oninput={on_system_prompt_change}
-                        class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 h-32" 
+                        class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 h-32" 
                         placeholder="Enter system prompt"
                     />
                 </div>
@@ -561,7 +561,7 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                                     <div class="flex-1">
                                         <div class="flex items-center mb-1">
                                             <i class="fas fa-function text-purple-500 mr-2"></i>
-                                            <span class="font-medium text-lg">{&tool.name}</span>
+                                            <span class="font-medium text-lg text-gray-900 dark:text-gray-100">{&tool.name}</span>
                                             <span class={format!("ml-2 px-2 py-1 text-xs rounded-full {}", 
                                                 if tool.enabled { 
                                                     "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400" 
