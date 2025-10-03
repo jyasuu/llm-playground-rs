@@ -3,13 +3,16 @@ use web_sys::HtmlInputElement;
 use wasm_bindgen::JsCast;
 use crate::llm_playground::provider_config::{FlexibleApiConfig, ProviderConfig};
 use crate::llm_playground::types::FunctionTool;
-use crate::llm_playground::components::{FunctionToolEditor, VisualFunctionToolEditor};
+use crate::llm_playground::components::{FunctionToolEditor, VisualFunctionToolEditor, McpSettingsPanel};
+use crate::llm_playground::mcp_client::McpClient;
 
 #[derive(Properties, PartialEq)]
 pub struct FlexibleSettingsPanelProps {
     pub config: FlexibleApiConfig,
     pub on_save: Callback<FlexibleApiConfig>,
     pub on_close: Callback<()>,
+    pub mcp_client: Option<McpClient>,
+    pub on_mcp_client_change: Callback<Option<McpClient>>,
 }
 
 #[function_component(FlexibleSettingsPanel)]
@@ -632,6 +635,45 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                     >
                         <i class="fas fa-plus mr-2"></i> {"Add Function Tool"}
                     </button>
+                </div>
+                
+                // MCP Settings
+                <div>
+                    <h3 class="font-medium mb-4 text-gray-900 dark:text-gray-100">{"MCP Servers"}</h3>
+                    <McpSettingsPanel
+                        config={
+                            // Convert FlexibleApiConfig to ApiConfig for MCP settings
+                            crate::llm_playground::types::ApiConfig {
+                                current_provider: crate::llm_playground::types::ApiProvider::Gemini,
+                                gemini: crate::llm_playground::types::GeminiConfig {
+                                    api_key: "".to_string(),
+                                    model: "".to_string(),
+                                },
+                                openai: crate::llm_playground::types::OpenAIConfig {
+                                    base_url: "".to_string(),
+                                    api_key: "".to_string(),
+                                    model: "".to_string(),
+                                },
+                                shared_settings: config.shared_settings.clone(),
+                                system_prompt: config.system_prompt.clone(),
+                                function_tools: config.function_tools.clone(),
+                                structured_outputs: config.structured_outputs.clone(),
+                                mcp_config: config.mcp_config.clone(),
+                            }
+                        }
+                        on_config_change={
+                            let config = config.clone();
+                            Callback::from(move |new_api_config: crate::llm_playground::types::ApiConfig| {
+                                let mut updated_config = (*config).clone();
+                                updated_config.mcp_config = new_api_config.mcp_config;
+                                // Also update function tools in case MCP tools were added
+                                updated_config.function_tools = new_api_config.function_tools;
+                                config.set(updated_config);
+                            })
+                        }
+                        mcp_client={props.mcp_client.clone()}
+                        on_mcp_client_change={props.on_mcp_client_change.clone()}
+                    />
                 </div>
                 
                 // Save Button

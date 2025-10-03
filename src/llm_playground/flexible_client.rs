@@ -27,6 +27,7 @@ impl FlexibleLLMClient {
     /// Create a temporary config for the legacy API
     fn create_legacy_config(&self, provider: &ProviderConfig, config: &FlexibleApiConfig, model: &str) -> crate::llm_playground::ApiConfig {
         use crate::llm_playground::{ApiConfig, ApiProvider, GeminiConfig, OpenAIConfig};
+        use crate::llm_playground::mcp_client::McpConfig;
         
         if provider.transformer.r#use.contains(&"gemini".to_string()) {
             ApiConfig {
@@ -48,6 +49,7 @@ impl FlexibleLLMClient {
                 system_prompt: config.system_prompt.clone(),
                 function_tools: config.get_enabled_function_tools().into_iter().cloned().collect(),
                 structured_outputs: config.structured_outputs.clone(),
+                mcp_config: McpConfig::default(),
             }
         } else {
             // OpenAI-compatible
@@ -70,6 +72,7 @@ impl FlexibleLLMClient {
                 system_prompt: config.system_prompt.clone(),
                 function_tools: config.get_enabled_function_tools().into_iter().cloned().collect(),
                 structured_outputs: config.structured_outputs.clone(),
+                mcp_config: McpConfig::default(),
             }
         }
     }

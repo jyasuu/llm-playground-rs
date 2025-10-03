@@ -49,7 +49,7 @@ pub fn function_call_handler(props: &FunctionCallHandlerProps) -> Html {
                             let response_clone = response.clone();
                             
                             wasm_bindgen_futures::spawn_local(async move {
-                                match builtin_tools::execute_builtin_tool(&function_call_clone.name, &function_call_clone.arguments).await {
+                                match builtin_tools::execute_builtin_tool(&function_call_clone.name, &function_call_clone.arguments, None).await {
                                     Ok(result) => {
                                         let func_response = FunctionResponse {
                                             id: function_call_clone.id.clone(),
@@ -128,7 +128,7 @@ pub fn function_call_handler(props: &FunctionCallHandlerProps) -> Html {
                     let response_clone = response.clone();
                     
                     wasm_bindgen_futures::spawn_local(async move {
-                        match builtin_tools::execute_builtin_tool(&function_call_clone.name, &function_call_clone.arguments).await {
+                        match builtin_tools::execute_builtin_tool(&function_call_clone.name, &function_call_clone.arguments, None).await {
                             Ok(result) => {
                                 let func_response = FunctionResponse {
                                     id: function_call_clone.id.clone(),

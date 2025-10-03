@@ -5,6 +5,8 @@ use wasm_bindgen_futures::JsFuture;
 use web_sys::{Request, RequestInit, RequestMode, Response};
 use std::collections::HashMap;
 
+use crate::llm_playground::mcp_client::McpClient;
+
 #[wasm_bindgen]
 extern "C" {
     #[wasm_bindgen(js_namespace = console)]
@@ -15,8 +17,21 @@ extern "C" {
 pub async fn execute_builtin_tool(
     tool_name: &str,
     arguments: &Value,
+    mcp_client: Option<&McpClient>,
 ) -> Result<Value, String> {
     log(&format!("execute_builtin_tool called with: {}", tool_name));
+    
+    // Check if this is an MCP tool
+    if tool_name.starts_with("mcp_") {
+        if let Some(client) = mcp_client {
+            if client.is_mcp_tool(tool_name) {
+                return client.call_tool(tool_name, arguments).await;
+            }
+        }
+        return Err(format!("MCP tool {} not available (client not initialized)", tool_name));
+    }
+    
+    // Handle built-in tools
     match tool_name {
         "fetch" => execute_fetch(arguments).await,
         _ => Err(format!("Unknown built-in tool: {}", tool_name)),

@@ -1,5 +1,6 @@
 // New flexible provider configuration system
 use serde::{Deserialize, Serialize};
+use crate::llm_playground::mcp_client::McpConfig;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ProviderConfig {
@@ -33,6 +34,7 @@ pub struct FlexibleApiConfig {
     pub system_prompt: String,
     pub function_tools: Vec<FunctionTool>,
     pub structured_outputs: Vec<StructuredOutput>,
+    pub mcp_config: McpConfig,
     // Session-specific settings
     pub current_session_provider: Option<String>, // Format: "provider_name,model_name"
 }
@@ -142,6 +144,7 @@ impl Default for FlexibleApiConfig {
             system_prompt: "You are a helpful assistant that responds in markdown format. Always be concise and to the point.".to_string(),
             function_tools: Self::get_default_function_tools(),
             structured_outputs: vec![],
+            mcp_config: McpConfig::default(),
             current_session_provider: None,
         }
     }
@@ -280,5 +283,29 @@ impl FlexibleApiConfig {
         let enabled = self.function_tools.iter().filter(|t| t.enabled).count();
         let categories = self.get_function_tool_categories().len();
         (total, enabled, categories)
+    }
+
+    /// Add MCP tools to the function tools list
+    pub fn add_mcp_tools(&mut self, mcp_tools: Vec<FunctionTool>) {
+        // Remove existing MCP tools first
+        self.function_tools.retain(|tool| !tool.name.starts_with("mcp_"));
+        
+        // Add new MCP tools
+        self.function_tools.extend(mcp_tools);
+    }
+
+    /// Get MCP configuration
+    pub fn get_mcp_config(&self) -> &McpConfig {
+        &self.mcp_config
+    }
+
+    /// Update MCP configuration
+    pub fn update_mcp_config(&mut self, config: McpConfig) {
+        self.mcp_config = config;
+    }
+
+    /// Get all function tools including MCP tools
+    pub fn get_all_function_tools(&self) -> Vec<&FunctionTool> {
+        self.function_tools.iter().collect()
     }
 }

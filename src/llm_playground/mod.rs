@@ -7,6 +7,7 @@ pub mod provider_config;
 pub mod flexible_client;
 pub mod flexible_playground;
 pub mod builtin_tools;
+pub mod mcp_client;
 
 pub use components::*;
 pub use storage::*;

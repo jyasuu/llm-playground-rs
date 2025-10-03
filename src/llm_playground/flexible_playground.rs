@@ -8,7 +8,8 @@ use wasm_bindgen::JsCast;
 use crate::llm_playground::{
     ChatSession, Message, MessageRole, FlexibleApiConfig,
     Sidebar, ChatHeader, ChatRoom, InputBar, FlexibleSettingsPanel, ModelSelector,
-    flexible_client::FlexibleLLMClient
+    flexible_client::FlexibleLLMClient,
+    mcp_client::McpClient
 };
 
 const STORAGE_KEY_FLEXIBLE_CONFIG: &str = "llm_playground_flexible_config";
@@ -28,6 +29,58 @@ pub fn flexible_llm_playground() -> Html {
     let current_message = use_state(|| String::new());
     let is_loading = use_state(|| false);
     let llm_client = use_state(|| FlexibleLLMClient::new());
+    let mcp_client = use_state(|| Option::<McpClient>::None);
+
+    // Auto-initialize MCP connections when config changes
+    {
+        let api_config = api_config.clone();
+        let mcp_client = mcp_client.clone();
+        
+        use_effect_with(api_config.clone(), move |config| {
+            let mcp_config = config.mcp_config.clone();
+            let mcp_client = mcp_client.clone();
+            
+            // Only initialize if there are enabled servers
+            let has_enabled_servers = mcp_config.servers.values().any(|server| server.enabled);
+            
+            if has_enabled_servers {
+                wasm_bindgen_futures::spawn_local(async move {
+                    let mut client = McpClient::new(mcp_config);
+                    match client.initialize().await {
+                        Ok(_) => {
+                            log!("MCP client initialized successfully in background");
+                            mcp_client.set(Some(client));
+                        }
+                        Err(e) => {
+                            log!("Failed to initialize MCP client:", &e);
+                            mcp_client.set(None);
+                        }
+                    }
+                });
+            } else {
+                mcp_client.set(None);
+            }
+            
+            || ()
+        });
+    }
+
+    // Auto-update function tools when MCP client changes
+    {
+        let api_config = api_config.clone();
+        let mcp_client = mcp_client.clone();
+        
+        use_effect_with(mcp_client.clone(), move |client| {
+            if let Some(mcp_client) = client.as_ref() {
+                let mcp_tools = mcp_client.get_function_tools();
+                let mut new_config = (*api_config).clone();
+                new_config.add_mcp_tools(mcp_tools);
+                api_config.set(new_config);
+                log!("Added MCP tools to function tools list");
+            }
+            || ()
+        });
+    }
 
     // Load data from localStorage on mount
     {
@@ -244,6 +297,13 @@ pub fn flexible_llm_playground() -> Html {
         })
     };
 
+    let on_mcp_client_change = {
+        let mcp_client = mcp_client.clone();
+        Callback::from(move |client: Option<McpClient>| {
+            mcp_client.set(client);
+        })
+    };
+
     let close_settings = {
         let show_settings = show_settings.clone();
         Callback::from(move |_| {
@@ -267,6 +327,7 @@ pub fn flexible_llm_playground() -> Html {
         let is_loading = is_loading.clone();
         let api_config = api_config.clone();
         let llm_client = llm_client.clone();
+        let mcp_client = mcp_client.clone();
         
         Callback::from(move |_| {
             let sessions = sessions.clone();
@@ -299,6 +360,7 @@ pub fn flexible_llm_playground() -> Html {
                 let session_id_clone = session_id.clone();
                 let config = (*api_config).clone();
                 let client = (*llm_client).clone();
+                let mcp_client = (*mcp_client).clone();
                 let is_loading_clone = is_loading.clone();
                 
                 wasm_bindgen_futures::spawn_local(async move {
@@ -394,9 +456,9 @@ pub fn flexible_llm_playground() -> Html {
                                             .find(|tool| tool.name == function_call.name) {
                                             
                                             if tool.is_builtin {
-                                                // Execute built-in tool with real functionality
+                                                // Execute built-in tool with real functionality (including MCP tools)
                                                 log!("Executing built-in tool: {}", &function_call.name);
-                                                match crate::llm_playground::builtin_tools::execute_builtin_tool(&function_call.name, &function_call.arguments).await {
+                                                match crate::llm_playground::builtin_tools::execute_builtin_tool(&function_call.name, &function_call.arguments, mcp_client.as_ref()).await {
                                                     Ok(result) => result,
                                                     Err(error) => serde_json::json!({"error": error}),
                                                 }
@@ -556,6 +618,7 @@ pub fn flexible_llm_playground() -> Html {
                     system_prompt: flexible_config.system_prompt.clone(),
                     function_tools: flexible_config.function_tools.clone(),
                     structured_outputs: flexible_config.structured_outputs.clone(),
+                    mcp_config: crate::llm_playground::mcp_client::McpConfig::default(),
                 }
             } else {
                 crate::llm_playground::ApiConfig {
@@ -577,6 +640,7 @@ pub fn flexible_llm_playground() -> Html {
                     system_prompt: flexible_config.system_prompt.clone(),
                     function_tools: flexible_config.function_tools.clone(),
                     structured_outputs: flexible_config.structured_outputs.clone(),
+                    mcp_config: crate::llm_playground::mcp_client::McpConfig::default(),
                 }
             }
         } else {
@@ -666,6 +730,8 @@ pub fn flexible_llm_playground() -> Html {
                             config={(*api_config).clone()}
                             on_save={save_settings}
                             on_close={close_settings}
+                            mcp_client={(*mcp_client).clone()}
+                            on_mcp_client_change={on_mcp_client_change}
                         />
                     }
                 } else {
