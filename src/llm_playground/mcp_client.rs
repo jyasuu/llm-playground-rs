@@ -131,6 +131,7 @@ impl McpClient {
         // Initialize connection
         match self.initialize_connection(server_name, url, &config.headers).await {
             Ok(session_id) => {
+                log(&format!("Received session ID for {}: {}", server_name, session_id));
                 self.session_ids.insert(server_name.to_string(), session_id);
             }
             Err(e) => {
@@ -181,14 +182,13 @@ impl McpClient {
             })),
         };
 
-        let response = self.send_request(url, &init_request, headers).await?;
+        let (response, session_id) = self.send_request_with_session(url, &init_request, headers, None).await?;
         
         if let Some(error) = response.error {
             return Err(format!("MCP initialization error: {}", error.message));
         }
 
-        // Extract session ID from response headers or generate one
-        let session_id = uuid::Uuid::new_v4().to_string();
+        // Return the session ID from the server response
         Ok(session_id)
     }
 
@@ -198,6 +198,8 @@ impl McpClient {
             .ok_or("Server not found in configuration")?;
         
         let url = server_config.url.as_ref().ok_or("Server URL not configured")?;
+        let session_id = self.session_ids.get(server_name).cloned();
+        log(&format!("Using session ID for {}: {:?}", server_name, session_id));
 
         let list_request = McpRequest {
             jsonrpc: "2.0".to_string(),
@@ -206,7 +208,7 @@ impl McpClient {
             params: None,
         };
 
-        let response = self.send_request(url, &list_request, &server_config.headers).await?;
+        let (response, _) = self.send_request_with_session(url, &list_request, &server_config.headers, session_id).await?;
         
         if let Some(error) = response.error {
             return Err(format!("MCP tools/list error: {}", error.message));
@@ -267,6 +269,8 @@ impl McpClient {
             .ok_or("Server not found in configuration")?;
         
         let url = server_config.url.as_ref().ok_or("Server URL not configured")?;
+        let session_id = self.session_ids.get(server_name).cloned();
+        log(&format!("Calling tool {} with session ID: {:?}", actual_tool_name, session_id));
 
         let call_request = McpRequest {
             jsonrpc: "2.0".to_string(),
@@ -278,7 +282,7 @@ impl McpClient {
             })),
         };
 
-        let response = self.send_request(url, &call_request, &server_config.headers).await?;
+        let (response, _) = self.send_request_with_session(url, &call_request, &server_config.headers, session_id).await?;
         
         if let Some(error) = response.error {
             return Err(format!("MCP tools/call error: {}", error.message));
@@ -288,13 +292,14 @@ impl McpClient {
         Ok(result)
     }
 
-    /// Send an MCP request to a server
-    async fn send_request(
+    /// Send an MCP request to a server with session handling
+    async fn send_request_with_session(
         &self,
         url: &str,
         request: &McpRequest,
-        headers: &Option<HashMap<String, String>>
-    ) -> Result<McpResponse, String> {
+        headers: &Option<HashMap<String, String>>,
+        session_id: Option<String>
+    ) -> Result<(McpResponse, String), String> {
         // Create request options
         let opts = RequestInit::new();
         opts.set_method("POST");
@@ -314,15 +319,18 @@ impl McpClient {
         request_headers.set("Content-Type", "application/json")
             .map_err(|e| format!("Failed to set content-type header: {:?}", e))?;
 
+        // Add session ID header if available (for subsequent requests)
+        if let Some(ref session_id) = session_id {
+            request_headers.set("mcp-session-id", session_id)
+                .map_err(|e| format!("Failed to set mcp-session-id header: {:?}", e))?;
+        }
+
         if let Some(custom_headers) = headers {
             for (key, value) in custom_headers {
                 request_headers.set(key, value)
                     .map_err(|e| format!("Failed to set header {}: {:?}", key, e))?;
             }
         }
-
-        // Add session ID if available
-        // Note: This would typically be handled by the MCP transport layer
 
         // Make the request
         let window = web_sys::window().ok_or("No global window object")?;
@@ -333,6 +341,20 @@ impl McpClient {
         let resp: Response = resp_value
             .dyn_into()
             .map_err(|_| "Response is not a Response object")?;
+
+        // Extract session ID from response headers (for initialization)
+        let response_session_id = if session_id.is_none() {
+            // For initialization requests, extract session ID from response headers
+            if let Ok(headers) = resp.headers().get("mcp-session-id") {
+                headers.unwrap_or_else(|| uuid::Uuid::new_v4().to_string())
+            } else {
+                // Generate a new session ID if server doesn't provide one
+                uuid::Uuid::new_v4().to_string()
+            }
+        } else {
+            // For subsequent requests, use the existing session ID
+            session_id.unwrap()
+        };
 
         // Check response status
         if !resp.ok() {
@@ -350,7 +372,7 @@ impl McpClient {
         let mcp_response: McpResponse = serde_json::from_str(&response_text)
             .map_err(|e| format!("Failed to parse MCP response: {}", e))?;
 
-        Ok(mcp_response)
+        Ok((mcp_response, response_session_id))
     }
 
     /// Convert MCP tools to FunctionTool format for the LLM playground

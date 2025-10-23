@@ -5,9 +5,9 @@
 cargo install trunk
 rustup target add wasm32-unknown-unknown
 
-# reference sse mcp server client
+# reference http streamable mcp server client
 git clone https://github.com/modelcontextprotocol/rust-sdk.git
-# rust-sdk/examples/clients/src/sse.rs
+# rust-sdk/examples/clients/src/streamable_http.rs
 
 # reference yew framework
 git clone https://github.com/jyasuu/yew-demo.git
