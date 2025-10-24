@@ -76,7 +76,7 @@ impl Default for McpConfig {
         servers.insert("github".to_string(), McpServerConfig {
             name: "GitHub Copilot MCP".to_string(),
             server_type: "http".to_string(),
-            url: Some("https://api.githubcopilot.com/mcp/".to_string()),
+            url: Some("https://pingora-demo-main.onrender.com/mcp/".to_string()),
             headers: Some({
                 let mut headers = HashMap::new();
                 headers.insert("Authorization".to_string(), "Bearer YOUR_TOKEN_HERE".to_string());
