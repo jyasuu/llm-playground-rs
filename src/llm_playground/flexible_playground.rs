@@ -2,8 +2,10 @@
 use yew::prelude::*;
 use gloo_storage::{LocalStorage, Storage};
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
 use gloo_console::log;
 use wasm_bindgen::JsCast;
+use gloo_timers::future::TimeoutFuture;
 
 use crate::llm_playground::{
     ChatSession, Message, MessageRole, FlexibleApiConfig,
@@ -31,34 +33,59 @@ pub fn flexible_llm_playground() -> Html {
     let llm_client = use_state(|| FlexibleLLMClient::new());
     let mcp_client = use_state(|| Option::<McpClient>::None);
 
-    // Auto-initialize MCP connections when config changes
+    // Auto-initialize MCP connections when MCP config changes
+    // Use a separate state to track MCP config changes to avoid infinite loops
+    let mcp_config_hash = use_state(|| 0u64);
+    
     {
         let api_config = api_config.clone();
         let mcp_client = mcp_client.clone();
+        let mcp_config_hash = mcp_config_hash.clone();
         
         use_effect_with(api_config.clone(), move |config| {
             let mcp_config = config.mcp_config.clone();
-            let mcp_client = mcp_client.clone();
             
-            // Only initialize if there are enabled servers
-            let has_enabled_servers = mcp_config.servers.values().any(|server| server.enabled);
+            // Calculate a simple hash of the MCP config to detect actual changes
+            let config_str = serde_json::to_string(&mcp_config).unwrap_or_default();
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            config_str.hash(&mut hasher);
+            let new_hash = hasher.finish();
             
-            if has_enabled_servers {
-                wasm_bindgen_futures::spawn_local(async move {
-                    let mut client = McpClient::new(mcp_config);
-                    match client.initialize().await {
-                        Ok(_) => {
-                            log!("MCP client initialized successfully in background");
-                            mcp_client.set(Some(client));
-                        }
-                        Err(e) => {
-                            log!("Failed to initialize MCP client:", &e);
-                            mcp_client.set(None);
-                        }
+            // Only initialize if the MCP config actually changed
+            if new_hash != *mcp_config_hash {
+                mcp_config_hash.set(new_hash);
+                
+                let mcp_client = mcp_client.clone();
+                let has_enabled_servers = mcp_config.servers.values().any(|server| server.enabled);
+                
+                if has_enabled_servers {
+                    // Check if we already have a client with the same config to avoid re-initialization
+                    let needs_initialization = if let Some(current_client) = mcp_client.as_ref() {
+                        // Compare current client config with new config
+                        let current_config_str = serde_json::to_string(current_client.get_config()).unwrap_or_default();
+                        current_config_str != config_str
+                    } else {
+                        true
+                    };
+                    
+                    if needs_initialization {
+                        wasm_bindgen_futures::spawn_local(async move {
+                            let mut client = McpClient::new(mcp_config);
+                            match client.initialize().await {
+                                Ok(_) => {
+                                    log!("MCP client initialized successfully in background");
+                                    mcp_client.set(Some(client));
+                                }
+                                Err(e) => {
+                                    log!("Failed to initialize MCP client:", &e);
+                                    mcp_client.set(None);
+                                }
+                            }
+                        });
                     }
-                });
-            } else {
-                mcp_client.set(None);
+                } else {
+                    mcp_client.set(None);
+                }
             }
             
             || ()
@@ -66,17 +93,33 @@ pub fn flexible_llm_playground() -> Html {
     }
 
     // Auto-update function tools when MCP client changes
+    // Use a flag to prevent infinite loops when updating tools
+    let updating_mcp_tools = use_state(|| false);
+    
     {
         let api_config = api_config.clone();
         let mcp_client = mcp_client.clone();
+        let updating_mcp_tools = updating_mcp_tools.clone();
         
         use_effect_with(mcp_client.clone(), move |client| {
-            if let Some(mcp_client) = client.as_ref() {
-                let mcp_tools = mcp_client.get_function_tools();
-                let mut new_config = (*api_config).clone();
-                new_config.add_mcp_tools(mcp_tools);
-                api_config.set(new_config);
-                log!("Added MCP tools to function tools list");
+            if !*updating_mcp_tools {
+                if let Some(mcp_client) = client.as_ref() {
+                    updating_mcp_tools.set(true);
+                    let mcp_tools = mcp_client.get_function_tools();
+                    let mut new_config = (*api_config).clone();
+                    new_config.add_mcp_tools(mcp_tools);
+                    api_config.set(new_config);
+                    log!("Added MCP tools to function tools list");
+                    
+                    // Reset the flag after a brief delay to allow config update to complete
+                    wasm_bindgen_futures::spawn_local({
+                        let updating_mcp_tools = updating_mcp_tools.clone();
+                        async move {
+                            TimeoutFuture::new(100).await;
+                            updating_mcp_tools.set(false);
+                        }
+                    });
+                }
             }
             || ()
         });

@@ -144,10 +144,8 @@ impl McpClient {
         match self.list_tools(server_name).await {
             Ok(tools) => {
                 for tool in tools {
-                    self.available_tools.insert(
-                        format!("mcp_{}_{}", server_name, tool.name),
-                        tool
-                    );
+                    let sanitized_name = Self::create_gemini_tool_name(&tool.server_name, &tool.name);
+                    self.available_tools.insert(sanitized_name, tool);
                 }
             }
             Err(e) => {
@@ -253,31 +251,23 @@ impl McpClient {
         tool_name: &str,
         arguments: &Value
     ) -> Result<Value, String> {
-        // Extract server name and tool name from prefixed tool name
-        let (server_name, actual_tool_name) = if tool_name.starts_with("mcp_") {
-            let parts: Vec<&str> = tool_name.splitn(3, '_').collect();
-            if parts.len() >= 3 {
-                (parts[1], parts[2])
-            } else {
-                return Err("Invalid MCP tool name format".to_string());
-            }
-        } else {
-            return Err("Tool name must start with 'mcp_' prefix".to_string());
-        };
+        // Get the MCP tool info from our available tools
+        let mcp_tool = self.available_tools.get(tool_name)
+            .ok_or("MCP tool not found")?;
 
-        let server_config = self.config.servers.get(server_name)
+        let server_config = self.config.servers.get(&mcp_tool.server_name)
             .ok_or("Server not found in configuration")?;
         
         let url = server_config.url.as_ref().ok_or("Server URL not configured")?;
-        let session_id = self.session_ids.get(server_name).cloned();
-        log(&format!("Calling tool {} with session ID: {:?}", actual_tool_name, session_id));
+        let session_id = self.session_ids.get(&mcp_tool.server_name).cloned();
+        log(&format!("Calling tool {} with session ID: {:?}", mcp_tool.name, session_id));
 
         let call_request = McpRequest {
             jsonrpc: "2.0".to_string(),
             id: uuid::Uuid::new_v4().to_string(),
             method: "tools/call".to_string(),
             params: Some(serde_json::json!({
-                "name": actual_tool_name,
+                "name": mcp_tool.name,  // Use the original tool name for the MCP call
                 "arguments": arguments
             })),
         };
@@ -375,13 +365,53 @@ impl McpClient {
         Ok((mcp_response, response_session_id))
     }
 
+    /// Sanitize names for Gemini API compatibility
+    /// Function names must start with a letter or underscore and can only contain
+    /// alphanumeric characters, underscores, dots, colons, or dashes, max 64 chars
+    fn sanitize_name_for_gemini(name: &str) -> String {
+        let mut sanitized = name
+            .chars()
+            .map(|c| {
+                if c.is_alphanumeric() || c == '_' || c == '.' || c == ':' || c == '-' {
+                    c
+                } else {
+                    '_'
+                }
+            })
+            .collect::<String>();
+        
+        // Ensure it starts with a letter or underscore
+        if !sanitized.chars().next().unwrap_or('_').is_alphabetic() && !sanitized.starts_with('_') {
+            sanitized = format!("_{}", sanitized);
+        }
+        
+        // Truncate to 64 characters max
+        if sanitized.len() > 64 {
+            sanitized.truncate(64);
+        }
+        
+        // Remove trailing underscores for cleaner names
+        sanitized.trim_end_matches('_').to_string()
+    }
+
+    /// Create a sanitized tool name for Gemini API
+    fn create_gemini_tool_name(server_name: &str, tool_name: &str) -> String {
+        let sanitized_server = Self::sanitize_name_for_gemini(server_name);
+        let sanitized_tool = Self::sanitize_name_for_gemini(tool_name);
+        let combined = format!("mcp_{}_{}", sanitized_server, sanitized_tool);
+        Self::sanitize_name_for_gemini(&combined)
+    }
+
     /// Convert MCP tools to FunctionTool format for the LLM playground
     pub fn get_function_tools(&self) -> Vec<FunctionTool> {
         let mut function_tools = Vec::new();
 
         for (prefixed_name, mcp_tool) in &self.available_tools {
+            // Create a Gemini-compatible name for the tool
+            let gemini_compatible_name = Self::create_gemini_tool_name(&mcp_tool.server_name, &mcp_tool.name);
+            
             let function_tool = FunctionTool {
-                name: prefixed_name.clone(),
+                name: gemini_compatible_name,
                 description: mcp_tool.description.clone()
                     .unwrap_or_else(|| format!("MCP tool: {}", mcp_tool.name)),
                 parameters: mcp_tool.input_schema.clone(),
@@ -398,7 +428,7 @@ impl McpClient {
 
     /// Check if a tool name is an MCP tool
     pub fn is_mcp_tool(&self, tool_name: &str) -> bool {
-        tool_name.starts_with("mcp_") && self.available_tools.contains_key(tool_name)
+        self.available_tools.contains_key(tool_name)
     }
 
     /// Get MCP configuration
@@ -420,8 +450,8 @@ impl McpClient {
     pub fn remove_server(&mut self, name: &str) {
         self.config.servers.remove(name);
         // Also remove any tools from that server
-        self.available_tools.retain(|tool_name, _| {
-            !tool_name.starts_with(&format!("mcp_{}_", name))
+        self.available_tools.retain(|_, mcp_tool| {
+            mcp_tool.server_name != name
         });
         self.session_ids.remove(name);
     }
@@ -429,6 +459,51 @@ impl McpClient {
     /// Get available MCP tools
     pub fn get_available_tools(&self) -> &HashMap<String, McpTool> {
         &self.available_tools
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sanitize_name_for_gemini() {
+        // Test basic sanitization
+        assert_eq!(McpClient::sanitize_name_for_gemini("GitHub Copilot MCP"), "GitHub_Copilot_MCP");
+        
+        // Test special characters
+        assert_eq!(McpClient::sanitize_name_for_gemini("test@#$%^&*()tool"), "test__________tool");
+        
+        // Test starting with number (should be prefixed with underscore)
+        assert_eq!(McpClient::sanitize_name_for_gemini("123tool"), "_123tool");
+        
+        // Test long names (should be truncated to 64 chars)
+        let long_name = "a".repeat(100);
+        let sanitized = McpClient::sanitize_name_for_gemini(&long_name);
+        assert!(sanitized.len() <= 64);
+        
+        // Test already valid names
+        assert_eq!(McpClient::sanitize_name_for_gemini("valid_tool_name"), "valid_tool_name");
+        assert_eq!(McpClient::sanitize_name_for_gemini("tool.with:dots-and_dashes"), "tool.with:dots-and_dashes");
+    }
+
+    #[test]
+    fn test_create_gemini_tool_name() {
+        assert_eq!(
+            McpClient::create_gemini_tool_name("GitHub Copilot MCP", "request_copilot_review"),
+            "mcp_GitHub_Copilot_MCP_request_copilot_review"
+        );
+        
+        assert_eq!(
+            McpClient::create_gemini_tool_name("simple", "tool"),
+            "mcp_simple_tool"
+        );
+        
+        // Test with special characters
+        assert_eq!(
+            McpClient::create_gemini_tool_name("test@server", "test#tool"),
+            "mcp_test_server_test_tool"
+        );
     }
 }
 

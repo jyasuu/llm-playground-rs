@@ -187,27 +187,50 @@ pub fn mcp_settings_panel(props: &McpSettingsPanelProps) -> Html {
         
         Callback::from(move |_| {
             let mcp_config = config.get_mcp_config().clone();
+            
+            // Only proceed if there are enabled servers
+            let has_enabled_servers = mcp_config.servers.values().any(|server| server.enabled);
+            if !has_enabled_servers {
+                gloo_console::log!("No enabled MCP servers to connect to");
+                return;
+            }
+            
             let mut client = McpClient::new(mcp_config);
             let status = connection_status.clone();
             let callback = on_mcp_client_change.clone();
+            
+            // Set status to "Connecting..." for enabled servers
+            let mut connecting_status = (*status).clone();
+            for (server_name, server_config) in client.get_config().servers.iter() {
+                if server_config.enabled {
+                    connecting_status.insert(server_name.clone(), "Connecting...".to_string());
+                }
+            }
+            status.set(connecting_status);
             
             wasm_bindgen_futures::spawn_local(async move {
                 match client.initialize().await {
                     Ok(_) => {
                         let mut new_status = (*status).clone();
-                        for server_name in client.get_config().servers.keys() {
-                            new_status.insert(server_name.clone(), "Connected".to_string());
+                        for (server_name, server_config) in client.get_config().servers.iter() {
+                            if server_config.enabled {
+                                new_status.insert(server_name.clone(), "Connected".to_string());
+                            }
                         }
                         status.set(new_status);
                         callback.emit(Some(client));
+                        gloo_console::log!("MCP client initialized successfully via manual connection");
                     }
                     Err(e) => {
                         let mut new_status = (*status).clone();
-                        for server_name in client.get_config().servers.keys() {
-                            new_status.insert(server_name.clone(), format!("Error: {}", e));
+                        for (server_name, server_config) in client.get_config().servers.iter() {
+                            if server_config.enabled {
+                                new_status.insert(server_name.clone(), format!("Error: {}", e));
+                            }
                         }
                         status.set(new_status);
                         callback.emit(None);
+                        gloo_console::log!("Failed to initialize MCP client via manual connection:", &e);
                     }
                 }
             });

@@ -22,13 +22,10 @@ pub async fn execute_builtin_tool(
     log(&format!("execute_builtin_tool called with: {}", tool_name));
     
     // Check if this is an MCP tool
-    if tool_name.starts_with("mcp_") {
-        if let Some(client) = mcp_client {
-            if client.is_mcp_tool(tool_name) {
-                return client.call_tool(tool_name, arguments).await;
-            }
+    if let Some(client) = mcp_client {
+        if client.is_mcp_tool(tool_name) {
+            return client.call_tool(tool_name, arguments).await;
         }
-        return Err(format!("MCP tool {} not available (client not initialized)", tool_name));
     }
     
     // Handle built-in tools
