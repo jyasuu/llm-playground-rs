@@ -11,7 +11,8 @@ use crate::llm_playground::{
     ChatSession, Message, MessageRole, FlexibleApiConfig,
     Sidebar, ChatHeader, ChatRoom, InputBar, FlexibleSettingsPanel, ModelSelector,
     flexible_client::FlexibleLLMClient,
-    mcp_client::McpClient
+    mcp_client::McpClient,
+    components::notification::{NotificationContainer, NotificationMessage, NotificationType, use_notifications}
 };
 
 const STORAGE_KEY_FLEXIBLE_CONFIG: &str = "llm_playground_flexible_config";
@@ -32,6 +33,9 @@ pub fn flexible_llm_playground() -> Html {
     let is_loading = use_state(|| false);
     let llm_client = use_state(|| FlexibleLLMClient::new());
     let mcp_client = use_state(|| Option::<McpClient>::None);
+    
+    // Notification system
+    let (notifications, add_notification, dismiss_notification) = use_notifications();
 
     // Auto-initialize MCP connections when MCP config changes
     // Use a separate state to track MCP config changes to avoid infinite loops
@@ -362,6 +366,16 @@ pub fn flexible_llm_playground() -> Html {
         })
     };
 
+    // Helper function to check if error is retryable (429 rate limit)
+    let is_retryable_error = |error: &str| -> bool {
+        error.contains("429") || error.contains("Rate limit exceeded") || error.contains("rate limit")
+    };
+
+    // Helper function for exponential backoff delay
+    let calculate_retry_delay = |base_delay: u32, attempt: u32| -> u32 {
+        base_delay * (2_u32.pow(attempt.min(5))) // Cap at 2^5 to prevent excessive delays
+    };
+
     // Message handling
     let send_message = {
         let sessions = sessions.clone();
@@ -371,9 +385,11 @@ pub fn flexible_llm_playground() -> Html {
         let api_config = api_config.clone();
         let llm_client = llm_client.clone();
         let mcp_client = mcp_client.clone();
+        let add_notification = add_notification.clone();
         
         Callback::from(move |_| {
             let sessions = sessions.clone();
+            let add_notification = add_notification.clone();
             if let Some(session_id) = current_session_id.as_ref() {
                 let message_content = (*current_message).clone();
                 if message_content.trim().is_empty() {
@@ -427,7 +443,56 @@ pub fn flexible_llm_playground() -> Html {
                         let mut max_iterations = 5; // Prevent infinite loops
                         
                         loop {
-                            match client.send_message(&current_messages, &config).await {
+                            let mut retry_attempt = 0u32;
+                            let max_retries = 3u32;
+                            
+                            let api_result = loop {
+                                match client.send_message(&current_messages, &config).await {
+                                    Ok(response) => break Ok(response),
+                                    Err(error) => {
+                                        // Check if this is a retryable error (429 rate limit)
+                                        if is_retryable_error(&error) && retry_attempt < max_retries {
+                                            retry_attempt += 1;
+                                            let delay_ms = calculate_retry_delay(config.shared_settings.retry_delay, retry_attempt - 1);
+                                            
+                                            // Show notification for rate limit
+                                            let notification = NotificationMessage::new(
+                                                format!("Rate limit hit. Retrying in {}ms... (attempt {}/{})", 
+                                                    delay_ms, retry_attempt, max_retries + 1),
+                                                NotificationType::Warning
+                                            ).with_duration(delay_ms + 1000);
+                                            add_notification.emit(notification);
+                                            
+                                            log!("Rate limit hit, retrying in {}ms (attempt {})", delay_ms, retry_attempt);
+                                            
+                                            // Wait before retry
+                                            TimeoutFuture::new(delay_ms).await;
+                                            continue;
+                                        } else {
+                                            // Non-retryable error or max retries exceeded
+                                            if is_retryable_error(&error) && retry_attempt >= max_retries {
+                                                let final_error = format!("Rate limit exceeded. Max retries ({}) reached. Please wait before trying again.", max_retries + 1);
+                                                let notification = NotificationMessage::new(
+                                                    final_error.clone(),
+                                                    NotificationType::Error
+                                                ).with_duration(8000);
+                                                add_notification.emit(notification);
+                                                break Err(final_error);
+                                            } else {
+                                                // Show notification for other errors
+                                                let notification = NotificationMessage::new(
+                                                    format!("API Error: {}", error),
+                                                    NotificationType::Error
+                                                ).with_duration(6000);
+                                                add_notification.emit(notification);
+                                                break Err(error);
+                                            }
+                                        }
+                                    }
+                                }
+                            };
+                            
+                            match api_result {
                                 Ok(response) => {
                                     // Add any text content to final response
                                     if let Some(content) = &response.content {
@@ -577,13 +642,9 @@ pub fn flexible_llm_playground() -> Html {
                                         break;
                                     }
                                 },
-                                Err(error) => {
-                                    log!("API error:", &error);
-                                    if final_response.is_empty() {
-                                        final_response = format!("❌ **API Error**: {}", error);
-                                    } else {
-                                        final_response.push_str(&format!("\n\n❌ **API Error**: {}", error));
-                                    }
+                                Err(_error) => {
+                                    // Error already handled above with notifications
+                                    // Don't add error messages to chat history for retryable errors
                                     break;
                                 }
                             }
@@ -787,6 +848,12 @@ pub fn flexible_llm_playground() -> Html {
                     on_select={on_model_selected}
                     on_cancel={on_model_selector_cancel}
                     show={*show_model_selector}
+                />
+                
+                // Notification container
+                <NotificationContainer 
+                    notifications={notifications}
+                    on_dismiss={dismiss_notification}
                 />
             </div>
         </div>

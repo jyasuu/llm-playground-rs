@@ -8,6 +8,7 @@ pub mod settings_panel;
 pub mod message_bubble;
 pub mod function_tool_editor;
 pub mod visual_function_tool_editor;
+pub mod notification;
 pub mod flexible_settings_panel;
 pub mod model_selector;
 pub mod mcp_settings_panel;
