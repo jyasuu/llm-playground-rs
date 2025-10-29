@@ -6,11 +6,11 @@ use crate::llm_playground::api_clients::{
 use crate::llm_playground::{ApiConfig, Message, MessageRole};
 use gloo_console::log;
 use gloo_net::http::Request;
+use js_sys::Promise;
 use serde::{Deserialize, Serialize};
 use std::future::Future;
 use std::pin::Pin;
 use wasm_bindgen_futures::JsFuture;
-use js_sys::Promise;
 use web_sys;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -74,15 +74,12 @@ impl OpenAIClient {
             system_prompt: None,
         }
     }
-    
+
     // Helper function to sleep for a specified duration
     async fn sleep(ms: i32) {
         let promise = Promise::new(&mut |resolve, _| {
             let window = web_sys::window().unwrap();
-            let _ = window.set_timeout_with_callback_and_timeout_and_arguments_0(
-                &resolve,
-                ms,
-            );
+            let _ = window.set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, ms);
         });
         let _ = JsFuture::from(promise).await;
     }
@@ -103,11 +100,9 @@ impl OpenAIClient {
 
         // Add conversation history
         for conv_msg in &self.conversation_history {
-
             log!("conv_msg_json");
             let conv_msg_json = serde_json::json!(conv_msg.clone());
             log!(conv_msg_json.to_string());
-
 
             if !conv_msg.content.is_empty()
                 || conv_msg.function_call.is_some()
@@ -136,20 +131,23 @@ impl OpenAIClient {
                 if let Some(fc) = &conv_msg.function_call {
                     if role == "assistant" {
                         // Convert function call JSON to proper tool_calls format
-                        if let Ok(func_calls) = serde_json::from_value::<Vec<serde_json::Value>>(fc.clone()) {
+                        if let Ok(func_calls) =
+                            serde_json::from_value::<Vec<serde_json::Value>>(fc.clone())
+                        {
                             let mut tool_calls = Vec::new();
                             for func_call in func_calls {
                                 if let (Some(id), Some(name), Some(args)) = (
                                     func_call.get("id").and_then(|v| v.as_str()),
                                     func_call.get("name").and_then(|v| v.as_str()),
-                                    func_call.get("arguments")
+                                    func_call.get("arguments"),
                                 ) {
                                     tool_calls.push(ToolCall {
                                         id: id.to_string(),
                                         call_type: "function".to_string(),
                                         function: FunctionCall {
                                             name: name.to_string(),
-                                            arguments: serde_json::to_string(args).unwrap_or_default(),
+                                            arguments: serde_json::to_string(args)
+                                                .unwrap_or_default(),
                                         },
                                     });
                                 }
@@ -171,7 +169,8 @@ impl OpenAIClient {
                             openai_msg.name = Some(func_name.to_string());
                         }
                         if let Some(response_data) = fr.get("response") {
-                            openai_msg.content = Some(serde_json::to_string(response_data).unwrap_or_default());
+                            openai_msg.content =
+                                Some(serde_json::to_string(response_data).unwrap_or_default());
                         }
                     }
                 }
@@ -180,18 +179,15 @@ impl OpenAIClient {
                 let openai_msg_json = serde_json::json!(openai_msg.clone());
                 log!(openai_msg_json.to_string());
 
-
                 openai_messages.push(openai_msg);
             }
         }
 
         // Add new messages
         for message in messages {
-            
             log!("message_json");
             let message_json = serde_json::json!(message.clone());
             log!(message_json.to_string());
-
 
             let role = match message.role {
                 MessageRole::System => {
@@ -235,18 +231,20 @@ impl OpenAIClient {
                     }
                 }
             }
-            
+
             // Handle function calls from assistant messages
             if message.role == MessageRole::Assistant {
                 if let Some(fc) = &message.function_call {
                     // Convert function call JSON to proper tool_calls format
-                    if let Ok(func_calls) = serde_json::from_value::<Vec<serde_json::Value>>(fc.clone()) {
+                    if let Ok(func_calls) =
+                        serde_json::from_value::<Vec<serde_json::Value>>(fc.clone())
+                    {
                         let mut tool_calls = Vec::new();
                         for func_call in func_calls {
                             if let (Some(id), Some(name), Some(args)) = (
                                 func_call.get("id").and_then(|v| v.as_str()),
                                 func_call.get("name").and_then(|v| v.as_str()),
-                                func_call.get("arguments")
+                                func_call.get("arguments"),
                             ) {
                                 tool_calls.push(ToolCall {
                                     id: id.to_string(),
@@ -265,11 +263,9 @@ impl OpenAIClient {
                 }
             }
 
-            
             log!("openai_msg_json");
             let openai_msg_json = serde_json::json!(openai_msg.clone());
             log!(openai_msg_json.to_string());
-
 
             openai_messages.push(openai_msg);
         }
@@ -422,11 +418,15 @@ impl LLMClient for OpenAIClient {
                 temperature: config_clone.shared_settings.temperature,
                 max_tokens: config_clone.shared_settings.max_tokens,
                 tools: tools.clone(),
-                tool_choice: if tools.is_some() { Some("auto".to_string()) } else { None },
+                tool_choice: if tools.is_some() {
+                    Some("auto".to_string())
+                } else {
+                    None
+                },
             };
 
             let url = format!("{}/chat/completions", config_clone.openai.base_url);
-            
+
             // Add sleep/delay before sending the request (500ms)
             log!("Sleeping for 500ms before sending OpenAI request...");
             OpenAIClient::sleep(500).await;

@@ -1,8 +1,8 @@
-use yew::prelude::*;
-use web_sys::HtmlInputElement;
-use crate::llm_playground::{ApiConfig, ApiProvider};
-use crate::llm_playground::types::FunctionTool;
 use crate::llm_playground::components::{FunctionToolEditor, VisualFunctionToolEditor};
+use crate::llm_playground::types::FunctionTool;
+use crate::llm_playground::{ApiConfig, ApiProvider};
+use web_sys::HtmlInputElement;
+use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]
 pub struct SettingsPanelProps {
@@ -22,13 +22,10 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
     {
         let config = config.clone();
         let props_config = props.config.clone();
-        use_effect_with(
-            props_config,
-            move |props_config| {
-                config.set(props_config.clone());
-                || ()
-            },
-        );
+        use_effect_with(props_config, move |props_config| {
+            config.set(props_config.clone());
+            || ()
+        });
     }
 
     let on_close = {
@@ -196,7 +193,7 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
         let editing_function_index = editing_function_index.clone();
         Callback::from(move |tool: FunctionTool| {
             let mut new_config = (*config).clone();
-            
+
             if let Some(index) = *editing_function_index {
                 // Edit existing tool
                 if index < new_config.function_tools.len() {
@@ -206,7 +203,7 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
                 // Add new tool
                 new_config.function_tools.push(tool);
             }
-            
+
             config.set(new_config);
             show_function_editor.set(false);
             editing_function_index.set(None);
@@ -227,7 +224,7 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
             <div class="p-4 border-b border-gray-200 dark:border-gray-700">
                 <div class="flex justify-between items-center">
                     <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">{"Settings"}</h2>
-                    <button 
+                    <button
                         onclick={on_close}
                         class="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
                     >
@@ -235,29 +232,29 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
                     </button>
                 </div>
             </div>
-            
+
             <div class="p-4 space-y-6">
                 // API Selection
                 <div>
                     <h3 class="font-medium mb-2 text-gray-900 dark:text-gray-100">{"API Configuration"}</h3>
                     <div class="space-y-4">
                         <div class="flex items-center">
-                            <input 
-                                type="radio" 
-                                id="gemini-api" 
-                                name="api-type" 
+                            <input
+                                type="radio"
+                                id="gemini-api"
+                                name="api-type"
                                 value="gemini"
                                 checked={config.current_provider == ApiProvider::Gemini}
                                 onchange={on_provider_change.clone()}
-                                class="mr-2" 
+                                class="mr-2"
                             />
                             <label for="gemini-api">{"Gemini API"}</label>
                         </div>
                         <div class="flex items-center">
-                            <input 
-                                type="radio" 
-                                id="openai-api" 
-                                name="api-type" 
+                            <input
+                                type="radio"
+                                id="openai-api"
+                                name="api-type"
                                 value="openai"
                                 checked={config.current_provider == ApiProvider::OpenAI}
                                 onchange={on_provider_change}
@@ -267,26 +264,26 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
                         </div>
                     </div>
                 </div>
-                
+
                 // Gemini Config
                 {if config.current_provider == ApiProvider::Gemini {
                     html! {
                         <div>
                             <div class="mb-4">
                                 <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="gemini-key">{"API Key"}</label>
-                                <input 
-                                    type="password" 
-                                    id="gemini-key" 
+                                <input
+                                    type="password"
+                                    id="gemini-key"
                                     value={config.gemini.api_key.clone()}
                                     oninput={on_gemini_key_change}
-                                    class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" 
+                                    class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                                     placeholder="Enter your Gemini API key"
                                 />
                             </div>
                             <div class="mb-4">
                                 <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="gemini-model">{"Model"}</label>
-                                <select 
-                                    id="gemini-model" 
+                                <select
+                                    id="gemini-model"
                                     value={config.gemini.model.clone()}
                                     onchange={on_gemini_model_change}
                                     class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
@@ -302,37 +299,37 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
                 } else {
                     html! {}
                 }}
-                
+
                 // OpenAI Config
                 {if config.current_provider == ApiProvider::OpenAI {
                     html! {
                         <div>
                             <div class="mb-4">
                                 <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="openai-url">{"API URL"}</label>
-                                <input 
-                                    type="text" 
-                                    id="openai-url" 
+                                <input
+                                    type="text"
+                                    id="openai-url"
                                     value={config.openai.base_url.clone()}
                                     oninput={on_openai_url_change}
-                                    class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" 
+                                    class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                                     placeholder="https://api.openai.com/v1"
                                 />
                             </div>
                             <div class="mb-4">
                                 <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="openai-key">{"API Key"}</label>
-                                <input 
-                                    type="password" 
-                                    id="openai-key" 
+                                <input
+                                    type="password"
+                                    id="openai-key"
                                     value={config.openai.api_key.clone()}
                                     oninput={on_openai_key_change}
-                                    class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100" 
+                                    class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                                     placeholder="Enter your API key"
                                 />
                             </div>
                             <div class="mb-4">
                                 <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="openai-model">{"Model"}</label>
-                                <select 
-                                    id="openai-model" 
+                                <select
+                                    id="openai-model"
                                     value={config.openai.model.clone()}
                                     onchange={on_openai_model_change}
                                     class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
@@ -347,7 +344,7 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
                 } else {
                     html! {}
                 }}
-                
+
                 // General Settings
                 <div>
                     <h3 class="font-medium mb-2 text-gray-900 dark:text-gray-100">{"General Settings"}</h3>
@@ -355,12 +352,12 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
                         <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="temperature">
                             {format!("Temperature: {:.1}", config.shared_settings.temperature)}
                         </label>
-                        <input 
-                            type="range" 
-                            id="temperature" 
-                            min="0" 
-                            max="1" 
-                            step="0.1" 
+                        <input
+                            type="range"
+                            id="temperature"
+                            min="0"
+                            max="1"
+                            step="0.1"
                             value={config.shared_settings.temperature.to_string()}
                             oninput={on_temperature_change}
                             class="w-full"
@@ -368,9 +365,9 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
                     </div>
                     <div class="mb-4">
                         <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="max-tokens">{"Max Tokens"}</label>
-                        <input 
-                            type="number" 
-                            id="max-tokens" 
+                        <input
+                            type="number"
+                            id="max-tokens"
                             value={config.shared_settings.max_tokens.to_string()}
                             oninput={on_max_tokens_change}
                             class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
@@ -378,35 +375,35 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
                     </div>
                     <div class="mb-4">
                         <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="retry-delay">{"Retry Delay (ms)"}</label>
-                        <input 
-                            type="number" 
-                            id="retry-delay" 
+                        <input
+                            type="number"
+                            id="retry-delay"
                             value={config.shared_settings.retry_delay.to_string()}
                             oninput={on_retry_delay_change}
                             class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                         />
                     </div>
                 </div>
-                
+
                 // System Prompt
                 <div>
                     <h3 class="font-medium mb-2 text-gray-900 dark:text-gray-100">{"System Prompt"}</h3>
-                    <textarea 
-                        id="system-prompt" 
+                    <textarea
+                        id="system-prompt"
                         value={config.system_prompt.clone()}
                         oninput={on_system_prompt_change}
-                        class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 h-32" 
+                        class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 h-32"
                         placeholder="Enter system prompt"
                     />
                 </div>
-                
+
                 // Function Tools
                 <div>
                     <div class="flex items-center justify-between mb-4">
                         <h3 class="font-medium text-gray-900 dark:text-gray-100">{"Function Tools"}</h3>
                         <div class="flex items-center space-x-2">
                             <span class="text-sm text-gray-600 dark:text-gray-300">{"Editor:"}</span>
-                            <button 
+                            <button
                                 onclick={
                                     let use_visual_editor = use_visual_editor.clone();
                                     Callback::from(move |_| {
@@ -430,17 +427,17 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
                     {for config.function_tools.iter().enumerate().map(|(index, tool)| {
                         let edit_callback = edit_function_tool.clone();
                         let delete_callback = delete_function_tool.clone();
-                        
+
                         let edit_click = {
                             let edit_callback = edit_callback.clone();
                             Callback::from(move |_| edit_callback.emit(index))
                         };
-                        
+
                         let delete_click = {
                             let delete_callback = delete_callback.clone();
                             Callback::from(move |_| delete_callback.emit(index))
                         };
-                        
+
                         html! {
                             <div key={index} class={format!("p-4 rounded-md mb-3 border {}",
                                 if tool.is_builtin {
@@ -469,7 +466,7 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
                                             }}
                                         </div>
                                         <p class="text-sm text-gray-600 dark:text-gray-300 mb-2">{&tool.description}</p>
-                                        
+
                                         // Show parameter count
                                         <div class="text-xs text-gray-500 dark:text-gray-400">
                                             {
@@ -496,14 +493,14 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
                                         } else {
                                             html! {
                                                 <>
-                                                    <button 
+                                                    <button
                                                         onclick={edit_click}
                                                         class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded hover:bg-blue-200 dark:hover:bg-blue-900/50"
                                                         title="Edit function"
                                                     >
                                                         <i class="fas fa-edit"></i>
                                                     </button>
-                                                    <button 
+                                                    <button
                                                         onclick={delete_click}
                                                         class="text-xs px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded hover:bg-red-200 dark:hover:bg-red-900/50"
                                                         title="Delete function"
@@ -518,18 +515,18 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
                             </div>
                         }
                     })}
-                    
-                    <button 
+
+                    <button
                         onclick={add_function_tool}
                         class="flex items-center justify-center w-full p-3 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-md text-gray-500 dark:text-gray-400 hover:border-primary-500 hover:text-primary-500 dark:hover:border-primary-400 dark:hover:text-primary-400 transition-colors"
                     >
                         <i class="fas fa-plus mr-2"></i> {"Add Function Tool"}
                     </button>
                 </div>
-                
+
                 // Save Button
                 <div class="pt-4">
-                    <button 
+                    <button
                         onclick={on_save}
                         class="w-full bg-primary-600 hover:bg-primary-700 text-white py-2 px-4 rounded-md"
                     >
@@ -537,7 +534,7 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
                     </button>
                 </div>
             </div>
-            
+
             // Function Tool Editor Modal
             {if *show_function_editor {
                 let editing_tool = if let Some(index) = *editing_function_index {
@@ -545,7 +542,7 @@ pub fn settings_panel(props: &SettingsPanelProps) -> Html {
                 } else {
                     None
                 };
-                
+
                 if *use_visual_editor {
                     html! {
                         <VisualFunctionToolEditor

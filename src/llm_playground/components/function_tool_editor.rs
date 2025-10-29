@@ -1,6 +1,6 @@
-use yew::prelude::*;
-use web_sys::HtmlInputElement;
 use crate::llm_playground::FunctionTool;
+use web_sys::HtmlInputElement;
+use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]
 pub struct FunctionToolEditorProps {
@@ -28,8 +28,7 @@ pub fn function_tool_editor(props: &FunctionToolEditorProps) -> Html {
     });
 
     let parameters_text = use_state(|| {
-        serde_json::to_string_pretty(&tool.parameters)
-            .unwrap_or_else(|_| String::from("{}"))
+        serde_json::to_string_pretty(&tool.parameters).unwrap_or_else(|_| String::from("{}"))
     });
 
     // Update local state when props change
@@ -37,19 +36,16 @@ pub fn function_tool_editor(props: &FunctionToolEditorProps) -> Html {
         let tool = tool.clone();
         let parameters_text = parameters_text.clone();
         let props_tool = props.tool.clone();
-        use_effect_with(
-            props_tool,
-            move |props_tool| {
-                if let Some(t) = props_tool {
-                    tool.set(t.clone());
-                    parameters_text.set(
-                        serde_json::to_string_pretty(&t.parameters)
-                            .unwrap_or_else(|_| String::from("{}"))
-                    );
-                }
-                || ()
-            },
-        );
+        use_effect_with(props_tool, move |props_tool| {
+            if let Some(t) = props_tool {
+                tool.set(t.clone());
+                parameters_text.set(
+                    serde_json::to_string_pretty(&t.parameters)
+                        .unwrap_or_else(|_| String::from("{}")),
+                );
+            }
+            || ()
+        });
     }
 
     let on_name_change = {
@@ -79,7 +75,7 @@ pub fn function_tool_editor(props: &FunctionToolEditorProps) -> Html {
             let input: HtmlInputElement = e.target_unchecked_into();
             let text = input.value();
             parameters_text.set(text.clone());
-            
+
             // Try to parse JSON and update tool if valid
             if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&text) {
                 let mut new_tool = (*tool).clone();
@@ -115,7 +111,7 @@ pub fn function_tool_editor(props: &FunctionToolEditorProps) -> Html {
     };
 
     // Validate if current tool is valid
-    let is_valid = !tool.name.trim().is_empty() 
+    let is_valid = !tool.name.trim().is_empty()
         && !tool.description.trim().is_empty()
         && serde_json::from_str::<serde_json::Value>(&parameters_text).is_ok()
         && serde_json::from_str::<serde_json::Value>(&tool.mock_response).is_ok();
@@ -130,7 +126,7 @@ pub fn function_tool_editor(props: &FunctionToolEditorProps) -> Html {
                     <h3 class="text-lg font-semibold">
                         {if props.tool.is_some() { "Edit Function Tool" } else { "Add Function Tool" }}
                     </h3>
-                    <button 
+                    <button
                         onclick={on_cancel_click.clone()}
                         class="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
                     >
@@ -156,33 +152,33 @@ pub fn function_tool_editor(props: &FunctionToolEditorProps) -> Html {
                 <div class="space-y-4">
                     <div>
                         <label class="block text-sm font-medium mb-1">{"Function Name"}</label>
-                        <input 
+                        <input
                             type="text"
                             value={tool.name.clone()}
                             oninput={on_name_change}
                             placeholder="e.g., get_weather"
                             disabled={is_builtin}
-                            class={format!("w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 {}", 
+                            class={format!("w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 {}",
                                 if is_builtin { "opacity-50 cursor-not-allowed" } else { "" })}
                         />
                     </div>
 
                     <div>
                         <label class="block text-sm font-medium mb-1">{"Description"}</label>
-                        <textarea 
+                        <textarea
                             value={tool.description.clone()}
                             oninput={on_description_change}
                             placeholder="What does this function do?"
                             rows="2"
                             disabled={is_builtin}
-                            class={format!("w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 {}", 
+                            class={format!("w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 {}",
                                 if is_builtin { "opacity-50 cursor-not-allowed" } else { "" })}
                         />
                     </div>
 
                     <div>
                         <label class="block text-sm font-medium mb-1">{"Parameters (JSON Schema)"}</label>
-                        <textarea 
+                        <textarea
                             value={(*parameters_text).clone()}
                             oninput={on_parameters_change}
                             placeholder={r#"{
@@ -217,7 +213,7 @@ pub fn function_tool_editor(props: &FunctionToolEditorProps) -> Html {
 
                     <div>
                         <label class="block text-sm font-medium mb-1">{"Mock Response (JSON)"}</label>
-                        <textarea 
+                        <textarea
                             value={tool.mock_response.clone()}
                             oninput={on_mock_response_change}
                             placeholder={r#"{"result": "Mock response data"}"#}
@@ -243,13 +239,13 @@ pub fn function_tool_editor(props: &FunctionToolEditorProps) -> Html {
                 </div>
 
                 <div class="flex justify-end space-x-2 mt-6">
-                    <button 
+                    <button
                         onclick={on_cancel_click}
                         class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
                     >
                         {"Cancel"}
                     </button>
-                    <button 
+                    <button
                         onclick={on_save_click}
                         disabled={!is_valid}
                         class={classes!(

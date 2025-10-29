@@ -1,6 +1,6 @@
-use yew::prelude::*;
-use crate::llm_playground::ChatSession;
 use super::message_bubble::MessageBubble;
+use crate::llm_playground::ChatSession;
+use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]
 pub struct ChatRoomProps {
@@ -15,22 +15,23 @@ pub fn chat_room(props: &ChatRoomProps) -> Html {
     // Auto-scroll to bottom when new messages arrive
     {
         let messages_container_ref = messages_container_ref.clone();
-        let messages_len = props.session.as_ref().map(|s| s.messages.len()).unwrap_or(0);
-        
-        use_effect_with(
-            messages_len,
-            move |_| {
-                if let Some(container) = messages_container_ref.cast::<web_sys::Element>() {
-                    container.set_scroll_top(container.scroll_height());
-                }
-                || ()
-            },
-        );
+        let messages_len = props
+            .session
+            .as_ref()
+            .map(|s| s.messages.len())
+            .unwrap_or(0);
+
+        use_effect_with(messages_len, move |_| {
+            if let Some(container) = messages_container_ref.cast::<web_sys::Element>() {
+                container.set_scroll_top(container.scroll_height());
+            }
+            || ()
+        });
     }
 
     html! {
         <div class="flex-1 overflow-hidden flex flex-col">
-            <div 
+            <div
                 ref={messages_container_ref}
                 class="chat-container overflow-y-auto p-4 space-y-6 custom-scrollbar"
                 style="height: calc(100vh - 140px);"
@@ -40,7 +41,7 @@ pub fn chat_room(props: &ChatRoomProps) -> Html {
                         <>
                             {for session.messages.iter().map(|message| {
                                 html! {
-                                    <MessageBubble 
+                                    <MessageBubble
                                         key={message.id.clone()}
                                         message={message.clone()}
                                     />

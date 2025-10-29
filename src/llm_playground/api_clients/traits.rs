@@ -1,14 +1,15 @@
 // Common traits for API clients
-use crate::llm_playground::{Message, ApiConfig};
+use crate::llm_playground::{ApiConfig, Message};
+use serde::{Deserialize, Serialize};
 use std::future::Future;
 use std::pin::Pin;
-use serde::{Deserialize, Serialize};
 
 // Stream callback type for handling streaming responses
 pub type StreamCallback = Box<dyn Fn(String, Option<serde_json::Value>) + 'static>;
 
 // Function call handler type for UI layer to handle function calls
-pub type FunctionCallHandler = Box<dyn Fn(FunctionCallRequest) -> Pin<Box<dyn Future<Output = FunctionResponse>>> + 'static>;
+pub type FunctionCallHandler =
+    Box<dyn Fn(FunctionCallRequest) -> Pin<Box<dyn Future<Output = FunctionResponse>>> + 'static>;
 
 // Represents a function call request from the LLM
 #[derive(Debug, Clone, PartialEq)]
@@ -32,16 +33,16 @@ pub trait LLMClient {
         messages: &[Message],
         config: &ApiConfig,
     ) -> Pin<Box<dyn Future<Output = Result<LLMResponse, String>>>>;
-    
+
     fn send_message_stream(
         &self,
         messages: &[Message],
         config: &ApiConfig,
         callback: StreamCallback,
     ) -> Pin<Box<dyn Future<Output = Result<(), String>>>>;
-    
+
     fn client_name(&self) -> &str;
-    
+
     // Get available models from the API
     fn get_available_models(
         &self,

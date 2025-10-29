@@ -71,19 +71,25 @@ pub struct McpClient {
 impl Default for McpConfig {
     fn default() -> Self {
         let mut servers = HashMap::new();
-        
+
         // Add example GitHub Copilot MCP server
-        servers.insert("github".to_string(), McpServerConfig {
-            name: "GitHub Copilot MCP".to_string(),
-            server_type: "http".to_string(),
-            url: Some("https://pingora-demo-main.onrender.com/mcp/".to_string()),
-            headers: Some({
-                let mut headers = HashMap::new();
-                headers.insert("Authorization".to_string(), "Bearer YOUR_TOKEN_HERE".to_string());
-                headers
-            }),
-            enabled: false, // Disabled by default until user configures token
-        });
+        servers.insert(
+            "github".to_string(),
+            McpServerConfig {
+                name: "GitHub Copilot MCP".to_string(),
+                server_type: "http".to_string(),
+                url: Some("https://pingora-demo-main.onrender.com/mcp/".to_string()),
+                headers: Some({
+                    let mut headers = HashMap::new();
+                    headers.insert(
+                        "Authorization".to_string(),
+                        "Bearer YOUR_TOKEN_HERE".to_string(),
+                    );
+                    headers
+                }),
+                enabled: false, // Disabled by default until user configures token
+            },
+        );
 
         Self { servers }
     }
@@ -101,17 +107,23 @@ impl McpClient {
     /// Initialize connections to all enabled MCP servers
     pub async fn initialize(&mut self) -> Result<(), String> {
         log("Initializing MCP client connections...");
-        
+
         // Clone the servers to avoid borrowing issues
         let servers = self.config.servers.clone();
         for (server_name, server_config) in servers {
             if server_config.enabled {
                 match self.connect_to_server(&server_name, &server_config).await {
                     Ok(_) => {
-                        log(&format!("Successfully connected to MCP server: {}", server_name));
+                        log(&format!(
+                            "Successfully connected to MCP server: {}",
+                            server_name
+                        ));
                     }
                     Err(e) => {
-                        log(&format!("Failed to connect to MCP server {}: {}", server_name, e));
+                        log(&format!(
+                            "Failed to connect to MCP server {}: {}",
+                            server_name, e
+                        ));
                     }
                 }
             }
@@ -121,7 +133,11 @@ impl McpClient {
     }
 
     /// Connect to a specific MCP server and discover its tools
-    async fn connect_to_server(&mut self, server_name: &str, config: &McpServerConfig) -> Result<(), String> {
+    async fn connect_to_server(
+        &mut self,
+        server_name: &str,
+        config: &McpServerConfig,
+    ) -> Result<(), String> {
         if config.server_type != "http" {
             return Err("Only HTTP MCP servers are currently supported in WASM".to_string());
         }
@@ -129,13 +145,22 @@ impl McpClient {
         let url = config.url.as_ref().ok_or("HTTP server must have URL")?;
 
         // Initialize connection
-        match self.initialize_connection(server_name, url, &config.headers).await {
+        match self
+            .initialize_connection(server_name, url, &config.headers)
+            .await
+        {
             Ok(session_id) => {
-                log(&format!("Received session ID for {}: {}", server_name, session_id));
+                log(&format!(
+                    "Received session ID for {}: {}",
+                    server_name, session_id
+                ));
                 self.session_ids.insert(server_name.to_string(), session_id);
             }
             Err(e) => {
-                log(&format!("Failed to initialize connection to {}: {}", server_name, e));
+                log(&format!(
+                    "Failed to initialize connection to {}: {}",
+                    server_name, e
+                ));
                 return Err(e);
             }
         }
@@ -144,7 +169,8 @@ impl McpClient {
         match self.list_tools(server_name).await {
             Ok(tools) => {
                 for tool in tools {
-                    let sanitized_name = Self::create_gemini_tool_name(&tool.server_name, &tool.name);
+                    let sanitized_name =
+                        Self::create_gemini_tool_name(&tool.server_name, &tool.name);
                     self.available_tools.insert(sanitized_name, tool);
                 }
             }
@@ -162,7 +188,7 @@ impl McpClient {
         &self,
         _server_name: &str,
         url: &str,
-        headers: &Option<HashMap<String, String>>
+        headers: &Option<HashMap<String, String>>,
     ) -> Result<String, String> {
         let init_request = McpRequest {
             jsonrpc: "2.0".to_string(),
@@ -180,8 +206,10 @@ impl McpClient {
             })),
         };
 
-        let (response, session_id) = self.send_request_with_session(url, &init_request, headers, None).await?;
-        
+        let (response, session_id) = self
+            .send_request_with_session(url, &init_request, headers, None)
+            .await?;
+
         if let Some(error) = response.error {
             return Err(format!("MCP initialization error: {}", error.message));
         }
@@ -192,12 +220,21 @@ impl McpClient {
 
     /// List tools available on an MCP server
     async fn list_tools(&self, server_name: &str) -> Result<Vec<McpTool>, String> {
-        let server_config = self.config.servers.get(server_name)
+        let server_config = self
+            .config
+            .servers
+            .get(server_name)
             .ok_or("Server not found in configuration")?;
-        
-        let url = server_config.url.as_ref().ok_or("Server URL not configured")?;
+
+        let url = server_config
+            .url
+            .as_ref()
+            .ok_or("Server URL not configured")?;
         let session_id = self.session_ids.get(server_name).cloned();
-        log(&format!("Using session ID for {}: {:?}", server_name, session_id));
+        log(&format!(
+            "Using session ID for {}: {:?}",
+            server_name, session_id
+        ));
 
         let list_request = McpRequest {
             jsonrpc: "2.0".to_string(),
@@ -206,29 +243,34 @@ impl McpClient {
             params: None,
         };
 
-        let (response, _) = self.send_request_with_session(url, &list_request, &server_config.headers, session_id).await?;
-        
+        let (response, _) = self
+            .send_request_with_session(url, &list_request, &server_config.headers, session_id)
+            .await?;
+
         if let Some(error) = response.error {
             return Err(format!("MCP tools/list error: {}", error.message));
         }
 
         let result = response.result.ok_or("No result in tools/list response")?;
         let tools_array = result.get("tools").ok_or("No 'tools' field in response")?;
-        
+
         let mut tools = Vec::new();
         if let Some(tools_list) = tools_array.as_array() {
             for tool_value in tools_list {
                 if let Ok(tool_data) = serde_json::from_value::<Value>(tool_value.clone()) {
-                    let name = tool_data.get("name")
+                    let name = tool_data
+                        .get("name")
                         .and_then(|v| v.as_str())
                         .unwrap_or("unknown")
                         .to_string();
-                    
-                    let description = tool_data.get("description")
+
+                    let description = tool_data
+                        .get("description")
                         .and_then(|v| v.as_str())
                         .map(|s| s.to_string());
-                    
-                    let input_schema = tool_data.get("inputSchema")
+
+                    let input_schema = tool_data
+                        .get("inputSchema")
                         .cloned()
                         .unwrap_or(serde_json::json!({}));
 
@@ -246,21 +288,28 @@ impl McpClient {
     }
 
     /// Call a tool on an MCP server
-    pub async fn call_tool(
-        &self,
-        tool_name: &str,
-        arguments: &Value
-    ) -> Result<Value, String> {
+    pub async fn call_tool(&self, tool_name: &str, arguments: &Value) -> Result<Value, String> {
         // Get the MCP tool info from our available tools
-        let mcp_tool = self.available_tools.get(tool_name)
+        let mcp_tool = self
+            .available_tools
+            .get(tool_name)
             .ok_or("MCP tool not found")?;
 
-        let server_config = self.config.servers.get(&mcp_tool.server_name)
+        let server_config = self
+            .config
+            .servers
+            .get(&mcp_tool.server_name)
             .ok_or("Server not found in configuration")?;
-        
-        let url = server_config.url.as_ref().ok_or("Server URL not configured")?;
+
+        let url = server_config
+            .url
+            .as_ref()
+            .ok_or("Server URL not configured")?;
         let session_id = self.session_ids.get(&mcp_tool.server_name).cloned();
-        log(&format!("Calling tool {} with session ID: {:?}", mcp_tool.name, session_id));
+        log(&format!(
+            "Calling tool {} with session ID: {:?}",
+            mcp_tool.name, session_id
+        ));
 
         let call_request = McpRequest {
             jsonrpc: "2.0".to_string(),
@@ -272,8 +321,10 @@ impl McpClient {
             })),
         };
 
-        let (response, _) = self.send_request_with_session(url, &call_request, &server_config.headers, session_id).await?;
-        
+        let (response, _) = self
+            .send_request_with_session(url, &call_request, &server_config.headers, session_id)
+            .await?;
+
         if let Some(error) = response.error {
             return Err(format!("MCP tools/call error: {}", error.message));
         }
@@ -288,7 +339,7 @@ impl McpClient {
         url: &str,
         request: &McpRequest,
         headers: &Option<HashMap<String, String>>,
-        session_id: Option<String>
+        session_id: Option<String>,
     ) -> Result<(McpResponse, String), String> {
         // Create request options
         let opts = RequestInit::new();
@@ -306,18 +357,21 @@ impl McpClient {
 
         // Set headers
         let request_headers = web_request.headers();
-        request_headers.set("Content-Type", "application/json")
+        request_headers
+            .set("Content-Type", "application/json")
             .map_err(|e| format!("Failed to set content-type header: {:?}", e))?;
 
         // Add session ID header if available (for subsequent requests)
         if let Some(ref session_id) = session_id {
-            request_headers.set("mcp-session-id", session_id)
+            request_headers
+                .set("mcp-session-id", session_id)
                 .map_err(|e| format!("Failed to set mcp-session-id header: {:?}", e))?;
         }
 
         if let Some(custom_headers) = headers {
             for (key, value) in custom_headers {
-                request_headers.set(key, value)
+                request_headers
+                    .set(key, value)
                     .map_err(|e| format!("Failed to set header {}: {:?}", key, e))?;
             }
         }
@@ -348,15 +402,22 @@ impl McpClient {
 
         // Check response status
         if !resp.ok() {
-            return Err(format!("HTTP error: {} {}", resp.status(), resp.status_text()));
+            return Err(format!(
+                "HTTP error: {} {}",
+                resp.status(),
+                resp.status_text()
+            ));
         }
 
         // Get response body
-        let response_text = JsFuture::from(resp.text().map_err(|e| format!("Failed to get response text: {:?}", e))?)
-            .await
-            .map_err(|e| format!("Failed to read response body: {:?}", e))?
-            .as_string()
-            .unwrap_or_default();
+        let response_text = JsFuture::from(
+            resp.text()
+                .map_err(|e| format!("Failed to get response text: {:?}", e))?,
+        )
+        .await
+        .map_err(|e| format!("Failed to read response body: {:?}", e))?
+        .as_string()
+        .unwrap_or_default();
 
         // Parse MCP response
         let mcp_response: McpResponse = serde_json::from_str(&response_text)
@@ -379,17 +440,17 @@ impl McpClient {
                 }
             })
             .collect::<String>();
-        
+
         // Ensure it starts with a letter or underscore
         if !sanitized.chars().next().unwrap_or('_').is_alphabetic() && !sanitized.starts_with('_') {
             sanitized = format!("_{}", sanitized);
         }
-        
+
         // Truncate to 64 characters max
         if sanitized.len() > 64 {
             sanitized.truncate(64);
         }
-        
+
         // Remove trailing underscores for cleaner names
         sanitized.trim_end_matches('_').to_string()
     }
@@ -408,11 +469,14 @@ impl McpClient {
 
         for (prefixed_name, mcp_tool) in &self.available_tools {
             // Create a Gemini-compatible name for the tool
-            let gemini_compatible_name = Self::create_gemini_tool_name(&mcp_tool.server_name, &mcp_tool.name);
-            
+            let gemini_compatible_name =
+                Self::create_gemini_tool_name(&mcp_tool.server_name, &mcp_tool.name);
+
             let function_tool = FunctionTool {
                 name: gemini_compatible_name,
-                description: mcp_tool.description.clone()
+                description: mcp_tool
+                    .description
+                    .clone()
                     .unwrap_or_else(|| format!("MCP tool: {}", mcp_tool.name)),
                 parameters: mcp_tool.input_schema.clone(),
                 mock_response: r#"{"status": "success", "source": "mcp_server"}"#.to_string(),
@@ -450,9 +514,8 @@ impl McpClient {
     pub fn remove_server(&mut self, name: &str) {
         self.config.servers.remove(name);
         // Also remove any tools from that server
-        self.available_tools.retain(|_, mcp_tool| {
-            mcp_tool.server_name != name
-        });
+        self.available_tools
+            .retain(|_, mcp_tool| mcp_tool.server_name != name);
         self.session_ids.remove(name);
     }
 
@@ -469,22 +532,34 @@ mod tests {
     #[test]
     fn test_sanitize_name_for_gemini() {
         // Test basic sanitization
-        assert_eq!(McpClient::sanitize_name_for_gemini("GitHub Copilot MCP"), "GitHub_Copilot_MCP");
-        
+        assert_eq!(
+            McpClient::sanitize_name_for_gemini("GitHub Copilot MCP"),
+            "GitHub_Copilot_MCP"
+        );
+
         // Test special characters
-        assert_eq!(McpClient::sanitize_name_for_gemini("test@#$%^&*()tool"), "test__________tool");
-        
+        assert_eq!(
+            McpClient::sanitize_name_for_gemini("test@#$%^&*()tool"),
+            "test__________tool"
+        );
+
         // Test starting with number (should be prefixed with underscore)
         assert_eq!(McpClient::sanitize_name_for_gemini("123tool"), "_123tool");
-        
+
         // Test long names (should be truncated to 64 chars)
         let long_name = "a".repeat(100);
         let sanitized = McpClient::sanitize_name_for_gemini(&long_name);
         assert!(sanitized.len() <= 64);
-        
+
         // Test already valid names
-        assert_eq!(McpClient::sanitize_name_for_gemini("valid_tool_name"), "valid_tool_name");
-        assert_eq!(McpClient::sanitize_name_for_gemini("tool.with:dots-and_dashes"), "tool.with:dots-and_dashes");
+        assert_eq!(
+            McpClient::sanitize_name_for_gemini("valid_tool_name"),
+            "valid_tool_name"
+        );
+        assert_eq!(
+            McpClient::sanitize_name_for_gemini("tool.with:dots-and_dashes"),
+            "tool.with:dots-and_dashes"
+        );
     }
 
     #[test]
@@ -493,12 +568,12 @@ mod tests {
             McpClient::create_gemini_tool_name("GitHub Copilot MCP", "request_copilot_review"),
             "mcp_GitHub_Copilot_MCP_request_copilot_review"
         );
-        
+
         assert_eq!(
             McpClient::create_gemini_tool_name("simple", "tool"),
             "mcp_simple_tool"
         );
-        
+
         // Test with special characters
         assert_eq!(
             McpClient::create_gemini_tool_name("test@server", "test#tool"),
@@ -510,12 +585,12 @@ mod tests {
 // UUID generation for WASM
 mod uuid {
     pub struct Uuid;
-    
+
     impl Uuid {
         pub fn new_v4() -> Self {
             Self
         }
-        
+
         pub fn to_string(&self) -> String {
             // Simple UUID v4 generation for WASM
             let mut id = String::new();
@@ -523,7 +598,10 @@ mod uuid {
                 if i == 8 || i == 12 || i == 16 || i == 20 {
                     id.push('-');
                 }
-                id.push_str(&format!("{:x}", (js_sys::Math::random() * 16.0) as u8 & 0xf));
+                id.push_str(&format!(
+                    "{:x}",
+                    (js_sys::Math::random() * 16.0) as u8 & 0xf
+                ));
             }
             id
         }

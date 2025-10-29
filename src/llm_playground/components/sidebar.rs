@@ -1,6 +1,6 @@
-use yew::prelude::*;
+use crate::llm_playground::ChatSession;
 use std::collections::HashMap;
-use crate::llm_playground::{ChatSession};
+use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]
 pub struct SidebarProps {
@@ -16,8 +16,12 @@ pub struct SidebarProps {
 pub fn sidebar(props: &SidebarProps) -> Html {
     // Sort sessions by updated_at (most recent first)
     let mut sessions_vec: Vec<_> = props.sessions.iter().collect();
-    sessions_vec.sort_by(|a, b| b.1.updated_at.partial_cmp(&a.1.updated_at).unwrap_or(std::cmp::Ordering::Equal));
-    
+    sessions_vec.sort_by(|a, b| {
+        b.1.updated_at
+            .partial_cmp(&a.1.updated_at)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
     let on_new_session = props.on_new_session.clone();
     let new_session_click = Callback::from(move |_| {
         on_new_session.emit(());
@@ -37,13 +41,13 @@ pub fn sidebar(props: &SidebarProps) -> Html {
                 <h1 class="text-xl font-bold text-gray-900 dark:text-gray-100">{"LLM Playground"}</h1>
                 <p class="text-sm text-gray-600 dark:text-gray-300">{"Local Storage Demo"}</p>
             </div>
-            
+
             // Session List
             <div class="flex-1 overflow-y-auto custom-scrollbar">
                 <div class="p-4">
                     <div class="flex justify-between items-center mb-2">
                         <h2 class="font-semibold text-gray-900 dark:text-gray-100">{"Sessions"}</h2>
-                        <button 
+                        <button
                             onclick={new_session_click}
                             class="text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
                         >
@@ -57,7 +61,7 @@ pub fn sidebar(props: &SidebarProps) -> Html {
                             let session_id_delete = (*session_id).clone();
                             let on_select = props.on_select_session.clone();
                             let on_delete = props.on_delete_session.clone();
-                            
+
                             let click_handler = Callback::from(move |e: MouseEvent| {
                                 e.stop_propagation();
                                 on_select.emit(session_id_clone.clone());
@@ -69,9 +73,9 @@ pub fn sidebar(props: &SidebarProps) -> Html {
                             });
 
                             let time_ago = format_time_ago(session.updated_at);
-                            
+
                             html! {
-                                <li 
+                                <li
                                     key={session.id.clone()}
                                     class={classes!(
                                         "group", "relative", "rounded-md",
@@ -82,7 +86,7 @@ pub fn sidebar(props: &SidebarProps) -> Html {
                                         }
                                     )}
                                 >
-                                    <div 
+                                    <div
                                         onclick={click_handler}
                                         class="p-2 cursor-pointer pr-8"
                                     >
@@ -96,9 +100,9 @@ pub fn sidebar(props: &SidebarProps) -> Html {
                                             }}
                                         </div>
                                     </div>
-                                    
+
                                     // Delete button (visible on hover)
-                                    <button 
+                                    <button
                                         onclick={delete_handler}
                                         class="absolute right-1 top-1 w-6 h-6 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-200 dark:hover:bg-red-900/50 flex items-center justify-center"
                                         title="Delete session"
@@ -121,10 +125,10 @@ pub fn sidebar(props: &SidebarProps) -> Html {
                     </ul>
                 </div>
             </div>
-            
+
             // Settings Button
             <div class="p-4 border-t border-gray-200 dark:border-gray-600">
-                <button 
+                <button
                     onclick={on_settings_click}
                     class="w-full py-2 px-4 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 flex items-center justify-center text-gray-900 dark:text-gray-100"
                 >
@@ -139,7 +143,7 @@ fn format_time_ago(timestamp: f64) -> String {
     let now = js_sys::Date::now();
     let diff = now - timestamp;
     let seconds = diff / 1000.0;
-    
+
     if seconds < 60.0 {
         "Just now".to_string()
     } else if seconds < 3600.0 {

@@ -5,4 +5,7 @@ pub mod traits;
 
 pub use gemini_client::GeminiClient;
 pub use openai_client::OpenAIClient;
-pub use traits::{LLMClient, ConversationManager, ConversationMessage, FunctionResponse, StreamCallback, FunctionCallRequest, LLMResponse};
+pub use traits::{
+    ConversationManager, ConversationMessage, FunctionCallRequest, FunctionResponse, LLMClient,
+    LLMResponse, StreamCallback,
+};

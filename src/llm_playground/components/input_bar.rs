@@ -1,5 +1,5 @@
-use yew::prelude::*;
 use web_sys::{HtmlTextAreaElement, KeyboardEvent};
+use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]
 pub struct InputBarProps {
@@ -14,7 +14,7 @@ pub fn input_bar(props: &InputBarProps) -> Html {
     let textarea_ref = use_node_ref();
 
     let on_input = props.on_message_change.clone();
-    
+
     let on_send = {
         let callback = props.on_send_message.clone();
         Callback::from(move |_| {
@@ -25,7 +25,7 @@ pub fn input_bar(props: &InputBarProps) -> Html {
     let on_keydown = {
         let on_send = props.on_send_message.clone();
         let is_loading = props.is_loading;
-        
+
         Callback::from(move |e: KeyboardEvent| {
             if e.key() == "Enter" && !e.shift_key() && !is_loading {
                 e.prevent_default();
@@ -50,7 +50,7 @@ pub fn input_bar(props: &InputBarProps) -> Html {
     let combined_input = {
         let on_input = on_input.clone();
         let on_input_resize = on_input_resize.clone();
-        
+
         Callback::from(move |e: InputEvent| {
             on_input.emit(e.clone());
             on_input_resize.emit(e);
@@ -61,11 +61,11 @@ pub fn input_bar(props: &InputBarProps) -> Html {
         <div class="p-4 border-t border-gray-200 dark:border-gray-700">
             <div class="flex items-end border border-gray-300 dark:border-gray-500 rounded-lg bg-white dark:bg-gray-800 p-2">
                 <div class="flex-1">
-                    <textarea 
+                    <textarea
                         ref={textarea_ref}
-                        class="w-full resize-none border-0 focus:ring-0 bg-transparent dark:bg-transparent p-2 text-sm text-gray-900 dark:text-gray-100" 
-                        rows="1" 
-                        placeholder="Type your message here..." 
+                        class="w-full resize-none border-0 focus:ring-0 bg-transparent dark:bg-transparent p-2 text-sm text-gray-900 dark:text-gray-100"
+                        rows="1"
+                        placeholder="Type your message here..."
                         style="outline: none; min-height: 20px;"
                         value={props.current_message.clone()}
                         oninput={combined_input}
@@ -74,13 +74,13 @@ pub fn input_bar(props: &InputBarProps) -> Html {
                     />
                 </div>
                 <div class="flex items-center space-x-1">
-                    <button 
+                    <button
                         class="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
                         title="Attach file (not implemented)"
                     >
                         <i class="fas fa-paperclip"></i>
                     </button>
-                    <button 
+                    <button
                         onclick={on_send}
                         disabled={props.current_message.trim().is_empty() || props.is_loading}
                         class={classes!(

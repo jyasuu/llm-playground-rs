@@ -1,9 +1,12 @@
 // Gemini API client for WASM
-use crate::llm_playground::{Message, ApiConfig, MessageRole};
-use crate::llm_playground::api_clients::{LLMClient, ConversationManager, ConversationMessage, FunctionResponse, StreamCallback, FunctionCallRequest, LLMResponse};
+use crate::llm_playground::api_clients::{
+    ConversationManager, ConversationMessage, FunctionCallRequest, FunctionResponse, LLMClient,
+    LLMResponse, StreamCallback,
+};
+use crate::llm_playground::{ApiConfig, Message, MessageRole};
+use gloo_console::log;
 use gloo_net::http::Request;
 use serde::{Deserialize, Serialize};
-use gloo_console::log;
 use std::future::Future;
 use std::pin::Pin;
 
@@ -90,7 +93,10 @@ impl GeminiClient {
         }
     }
 
-    fn convert_messages_to_contents(&self, messages: &[Message]) -> (Vec<Content>, Option<SystemInstruction>) {
+    fn convert_messages_to_contents(
+        &self,
+        messages: &[Message],
+    ) -> (Vec<Content>, Option<SystemInstruction>) {
         let mut contents = Vec::new();
         let mut system_instruction = None;
 
@@ -108,7 +114,7 @@ impl GeminiClient {
         // Add conversation history
         for conv_msg in &self.conversation_history {
             let mut parts = Vec::new();
-            
+
             if !conv_msg.content.is_empty() {
                 parts.push(Part {
                     text: Some(conv_msg.content.clone()),
@@ -116,7 +122,7 @@ impl GeminiClient {
                     function_response: None,
                 });
             }
-            
+
             if let Some(fc) = &conv_msg.function_call {
                 parts.push(Part {
                     text: None,
@@ -124,7 +130,7 @@ impl GeminiClient {
                     function_response: None,
                 });
             }
-            
+
             if let Some(fr) = &conv_msg.function_response {
                 parts.push(Part {
                     text: None,
@@ -162,7 +168,7 @@ impl GeminiClient {
                             function_call: None,
                             function_response: None,
                         }];
-                        
+
                         if let Some(fc) = &message.function_call {
                             parts.push(Part {
                                 text: None,
@@ -170,7 +176,7 @@ impl GeminiClient {
                                 function_response: None,
                             });
                         }
-                        
+
                         if let Some(fr) = &message.function_response {
                             parts.push(Part {
                                 text: None,
@@ -192,7 +198,7 @@ impl GeminiClient {
                             function_call: None,
                             function_response: None,
                         }];
-                        
+
                         if let Some(fc) = &message.function_call {
                             parts.push(Part {
                                 text: None,
@@ -260,13 +266,11 @@ impl GeminiClient {
                 }
                 serde_json::Value::Object(cleaned)
             }
-            serde_json::Value::Array(arr) => {
-                serde_json::Value::Array(
-                    arr.iter()
-                        .map(|item| Self::clean_schema_for_gemini(item))
-                        .collect()
-                )
-            }
+            serde_json::Value::Array(arr) => serde_json::Value::Array(
+                arr.iter()
+                    .map(|item| Self::clean_schema_for_gemini(item))
+                    .collect(),
+            ),
             other => other.clone(),
         }
     }
@@ -278,7 +282,6 @@ impl LLMClient for GeminiClient {
         messages: &[Message],
         config: &ApiConfig,
     ) -> Pin<Box<dyn Future<Output = Result<LLMResponse, String>>>> {
-        
         let (contents, system_instruction) = self.convert_messages_to_contents(messages);
         let tools = self.build_tools(config);
         let api_key = config.gemini.api_key.clone();
@@ -288,7 +291,7 @@ impl LLMClient for GeminiClient {
 
         Box::pin(async move {
             log!("Gemini API call started");
-            
+
             if api_key.trim().is_empty() {
                 return Err("Please configure your Gemini API key in Settings".to_string());
             }
@@ -316,12 +319,20 @@ impl LLMClient for GeminiClient {
                 .map_err(|e| format!("Failed to create request: {}", e))?
                 .send()
                 .await
-                .map_err(|e| format!("Network error - Check your internet connection and API key: {}", e))?;
+                .map_err(|e| {
+                    format!(
+                        "Network error - Check your internet connection and API key: {}",
+                        e
+                    )
+                })?;
 
             if !response.ok() {
                 let status = response.status();
-                let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
-                
+                let error_text = response
+                    .text()
+                    .await
+                    .unwrap_or_else(|_| "Unknown error".to_string());
+
                 let error_message = if status == 400 {
                     if error_text.contains("API_KEY_INVALID") {
                         "Invalid Gemini API key. Please check your API key in Settings."
@@ -337,8 +348,11 @@ impl LLMClient for GeminiClient {
                 } else {
                     "Gemini API error occurred. Please try again."
                 };
-                
-                return Err(format!("{}\n\nDetailed error: {}", error_message, error_text));
+
+                return Err(format!(
+                    "{}\n\nDetailed error: {}",
+                    error_message, error_text
+                ));
             }
 
             let gemini_response: GeminiResponse = response
@@ -363,19 +377,22 @@ impl LLMClient for GeminiClient {
                 if let Some(text) = &part.text {
                     content = Some(text.clone());
                 }
-                
+
                 if let Some(function_call) = &part.function_call {
                     // Extract function name and arguments
                     if let (Some(name), Some(args)) = (
                         function_call.get("name").and_then(|v| v.as_str()),
-                        function_call.get("args")
+                        function_call.get("args"),
                     ) {
                         // Use the function call ID from Gemini (or generate one if not provided)
-                        let id = function_call.get("id")
+                        let id = function_call
+                            .get("id")
                             .and_then(|v| v.as_str())
                             .map(|s| s.to_string())
-                            .unwrap_or_else(|| format!("fc-{}-{}", name, js_sys::Date::now() as u64));
-                        
+                            .unwrap_or_else(|| {
+                                format!("fc-{}-{}", name, js_sys::Date::now() as u64)
+                            });
+
                         function_calls.push(FunctionCallRequest {
                             id,
                             name: name.to_string(),
@@ -410,7 +427,7 @@ impl LLMClient for GeminiClient {
 
         Box::pin(async move {
             log!("Gemini streaming API call started");
-            
+
             if api_key.trim().is_empty() {
                 return Err("Please configure your Gemini API key in Settings".to_string());
             }
@@ -444,16 +461,22 @@ impl LLMClient for GeminiClient {
 
             if !response.ok() {
                 let status = response.status();
-                let error_text = response.text().await.unwrap_or_else(|_| "Unknown error".to_string());
+                let error_text = response
+                    .text()
+                    .await
+                    .unwrap_or_else(|_| "Unknown error".to_string());
                 return Err(format!("API error {}: {}", status, error_text));
             }
 
-            let response_text = response.text().await.map_err(|e| format!("Failed to read response: {}", e))?;
-            
+            let response_text = response
+                .text()
+                .await
+                .map_err(|e| format!("Failed to read response: {}", e))?;
+
             // For now, send the full response as a single chunk
             // In a real implementation, we'd parse SSE events
             callback(response_text, None);
-            
+
             Ok(())
         })
     }

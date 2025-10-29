@@ -1,10 +1,12 @@
-use yew::prelude::*;
-use web_sys::HtmlInputElement;
-use wasm_bindgen::JsCast;
+use crate::llm_playground::components::{
+    FunctionToolEditor, McpSettingsPanel, VisualFunctionToolEditor,
+};
+use crate::llm_playground::mcp_client::McpClient;
 use crate::llm_playground::provider_config::{FlexibleApiConfig, ProviderConfig};
 use crate::llm_playground::types::FunctionTool;
-use crate::llm_playground::components::{FunctionToolEditor, VisualFunctionToolEditor, McpSettingsPanel};
-use crate::llm_playground::mcp_client::McpClient;
+use wasm_bindgen::JsCast;
+use web_sys::HtmlInputElement;
+use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]
 pub struct FlexibleSettingsPanelProps {
@@ -28,13 +30,10 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
     {
         let config = config.clone();
         let props_config = props.config.clone();
-        use_effect_with(
-            props_config,
-            move |props_config| {
-                config.set(props_config.clone());
-                || ()
-            },
-        );
+        use_effect_with(props_config, move |props_config| {
+            config.set(props_config.clone());
+            || ()
+        });
     }
 
     let on_close = {
@@ -89,7 +88,9 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                 let mut new_config = (*config).clone();
                 let index = *selected_provider_index;
                 if index < new_config.providers.len() {
-                    new_config.providers[index].models.push(model.trim().to_string());
+                    new_config.providers[index]
+                        .models
+                        .push(model.trim().to_string());
                     config.set(new_config);
                 }
             }
@@ -102,8 +103,12 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
         Callback::from(move |model_index: usize| {
             let mut new_config = (*config).clone();
             let provider_index = *selected_provider_index;
-            if provider_index < new_config.providers.len() && model_index < new_config.providers[provider_index].models.len() {
-                new_config.providers[provider_index].models.remove(model_index);
+            if provider_index < new_config.providers.len()
+                && model_index < new_config.providers[provider_index].models.len()
+            {
+                new_config.providers[provider_index]
+                    .models
+                    .remove(model_index);
                 config.set(new_config);
             }
         })
@@ -225,7 +230,7 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
         let editing_function_index = editing_function_index.clone();
         Callback::from(move |tool: FunctionTool| {
             let mut new_config = (*config).clone();
-            
+
             if let Some(index) = *editing_function_index {
                 if index < new_config.function_tools.len() {
                     new_config.function_tools[index] = tool;
@@ -233,7 +238,7 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
             } else {
                 new_config.function_tools.push(tool);
             }
-            
+
             config.set(new_config);
             show_function_editor.set(false);
             editing_function_index.set(None);
@@ -245,7 +250,8 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
         Callback::from(move |index: usize| {
             let mut new_config = (*config).clone();
             if index < new_config.function_tools.len() {
-                new_config.function_tools[index].enabled = !new_config.function_tools[index].enabled;
+                new_config.function_tools[index].enabled =
+                    !new_config.function_tools[index].enabled;
                 config.set(new_config);
             }
         })
@@ -267,7 +273,7 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
             <div class="p-4 border-b border-gray-200 dark:border-gray-700">
                 <div class="flex justify-between items-center">
                     <h2 class="text-lg font-semibold text-gray-900 dark:text-gray-100">{"Settings"}</h2>
-                    <button 
+                    <button
                         onclick={on_close}
                         class="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-900 dark:text-gray-100"
                     >
@@ -275,14 +281,14 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                     </button>
                 </div>
             </div>
-            
+
             <div class="p-4 space-y-6">
                 // Provider Management
                 <div>
                     <div class="flex justify-between items-center mb-4">
                         <h3 class="font-medium text-gray-900 dark:text-gray-100">{"LLM Providers"}</h3>
                         <div class="flex space-x-2">
-                            <button 
+                            <button
                                 onclick={
                                     let show_add_provider = show_add_provider.clone();
                                     Callback::from(move |_| show_add_provider.set(true))
@@ -293,7 +299,7 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                             </button>
                             {if config.providers.len() > 1 {
                                 html! {
-                                    <button 
+                                    <button
                                         onclick={on_remove_provider}
                                         class="text-xs px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded hover:bg-red-200 dark:hover:bg-red-900/50"
                                     >
@@ -305,11 +311,11 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                             }}
                         </div>
                     </div>
-                    
+
                     // Provider selector
                     <div class="mb-4">
                         <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">{"Select Provider"}</label>
-                        <select 
+                        <select
                             value={selected_provider_index.to_string()}
                             onchange={on_provider_select}
                             class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
@@ -330,8 +336,8 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                             <div class="space-y-4 p-4 border border-gray-200 dark:border-gray-600 rounded-md">
                                 <div>
                                     <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">{"Provider Name"}</label>
-                                    <input 
-                                        type="text" 
+                                    <input
+                                        type="text"
                                         value={provider.name.clone()}
                                         oninput={
                                             let callback = on_provider_field_change.clone();
@@ -343,11 +349,11 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                                         class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                                     />
                                 </div>
-                                
+
                                 <div>
                                     <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">{"API Base URL"}</label>
-                                    <input 
-                                        type="text" 
+                                    <input
+                                        type="text"
                                         value={provider.api_base_url.clone()}
                                         oninput={
                                             let callback = on_provider_field_change.clone();
@@ -360,11 +366,11 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                                         placeholder="https://api.example.com/v1/chat/completions"
                                     />
                                 </div>
-                                
+
                                 <div>
                                     <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">{"API Key"}</label>
-                                    <input 
-                                        type="password" 
+                                    <input
+                                        type="password"
                                         value={provider.api_key.clone()}
                                         oninput={
                                             let callback = on_provider_field_change.clone();
@@ -377,7 +383,7 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                                         placeholder="Enter API key"
                                     />
                                 </div>
-                                
+
                                 // Transformer type
                                 <div>
                                     <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300">{"API Type"}</label>
@@ -385,7 +391,7 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                                         {format!("Uses: {}", provider.transformer.r#use.join(", "))}
                                     </div>
                                 </div>
-                                
+
                                 // Models management
                                 <div>
                                     <label class="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">{"Available Models"}</label>
@@ -395,7 +401,7 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                                             html! {
                                                 <div key={model_index} class="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-600 rounded">
                                                     <span class="text-sm text-gray-900 dark:text-gray-100">{model}</span>
-                                                    <button 
+                                                    <button
                                                         onclick={
                                                             Callback::from(move |_| remove_callback.emit(model_index))
                                                         }
@@ -406,11 +412,11 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                                                 </div>
                                             }
                                         })}
-                                        
+
                                         // Add model input
                                         <div class="flex space-x-2">
-                                            <input 
-                                                type="text" 
+                                            <input
+                                                type="text"
                                                 id={format!("new-model-{}", *selected_provider_index)}
                                                 class="flex-1 p-2 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                                                 placeholder="Add new model..."
@@ -428,7 +434,7 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                                                     })
                                                 }
                                             />
-                                            <button 
+                                            <button
                                                 onclick={
                                                     let add_callback = on_add_model.clone();
                                                     let selected_index = *selected_provider_index;
@@ -458,7 +464,7 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                         html! {}
                     }}
                 </div>
-                
+
                 // General Settings (same as before)
                 <div>
                     <h3 class="font-medium mb-2 text-gray-900 dark:text-gray-100">{"General Settings"}</h3>
@@ -466,12 +472,12 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                         <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="temperature">
                             {format!("Temperature: {:.1}", config.shared_settings.temperature)}
                         </label>
-                        <input 
-                            type="range" 
-                            id="temperature" 
-                            min="0" 
-                            max="1" 
-                            step="0.1" 
+                        <input
+                            type="range"
+                            id="temperature"
+                            min="0"
+                            max="1"
+                            step="0.1"
                             value={config.shared_settings.temperature.to_string()}
                             oninput={on_temperature_change}
                             class="w-full"
@@ -479,9 +485,9 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                     </div>
                     <div class="mb-4">
                         <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="max-tokens">{"Max Tokens"}</label>
-                        <input 
-                            type="number" 
-                            id="max-tokens" 
+                        <input
+                            type="number"
+                            id="max-tokens"
                             value={config.shared_settings.max_tokens.to_string()}
                             oninput={on_max_tokens_change}
                             class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
@@ -489,35 +495,35 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                     </div>
                     <div class="mb-4">
                         <label class="block text-sm font-medium mb-1 text-gray-700 dark:text-gray-300" for="retry-delay">{"Retry Delay (ms)"}</label>
-                        <input 
-                            type="number" 
-                            id="retry-delay" 
+                        <input
+                            type="number"
+                            id="retry-delay"
                             value={config.shared_settings.retry_delay.to_string()}
                             oninput={on_retry_delay_change}
                             class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                         />
                     </div>
                 </div>
-                
+
                 // System Prompt
                 <div>
                     <h3 class="font-medium mb-2 text-gray-900 dark:text-gray-100">{"System Prompt"}</h3>
-                    <textarea 
-                        id="system-prompt" 
+                    <textarea
+                        id="system-prompt"
                         value={config.system_prompt.clone()}
                         oninput={on_system_prompt_change}
-                        class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 h-32" 
+                        class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 h-32"
                         placeholder="Enter system prompt"
                     />
                 </div>
-                
+
                 // Function Tools
                 <div>
                     <div class="flex items-center justify-between mb-4">
                         <h3 class="font-medium text-gray-900 dark:text-gray-100">{"Function Tools"}</h3>
                         <div class="flex items-center space-x-2">
                             <span class="text-sm text-gray-600 dark:text-gray-300">{"Editor:"}</span>
-                            <button 
+                            <button
                                 onclick={
                                     let use_visual_editor = use_visual_editor.clone();
                                     Callback::from(move |_| {
@@ -542,22 +548,22 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                         let edit_callback = edit_function_tool.clone();
                         let delete_callback = delete_function_tool.clone();
                         let toggle_callback = toggle_function_tool.clone();
-                        
+
                         let edit_click = {
                             let edit_callback = edit_callback.clone();
                             Callback::from(move |_| edit_callback.emit(index))
                         };
-                        
+
                         let delete_click = {
                             let delete_callback = delete_callback.clone();
                             Callback::from(move |_| delete_callback.emit(index))
                         };
-                        
+
                         let toggle_click = {
                             let toggle_callback = toggle_callback.clone();
                             Callback::from(move |_| toggle_callback.emit(index))
                         };
-                        
+
                         html! {
                             <div key={index} class="bg-gray-100 dark:bg-gray-700 p-4 rounded-md mb-3 border border-gray-200 dark:border-gray-600">
                                 <div class="flex items-start justify-between mb-2">
@@ -565,11 +571,11 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                                         <div class="flex items-center mb-1">
                                             <i class="fas fa-function text-purple-500 mr-2"></i>
                                             <span class="font-medium text-lg text-gray-900 dark:text-gray-100">{&tool.name}</span>
-                                            <span class={format!("ml-2 px-2 py-1 text-xs rounded-full {}", 
-                                                if tool.enabled { 
-                                                    "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400" 
-                                                } else { 
-                                                    "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400" 
+                                            <span class={format!("ml-2 px-2 py-1 text-xs rounded-full {}",
+                                                if tool.enabled {
+                                                    "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
+                                                } else {
+                                                    "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-400"
                                                 }
                                             )}>
                                                 {if tool.enabled { "Enabled" } else { "Disabled" }}
@@ -579,7 +585,7 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                                             </span>
                                         </div>
                                         <p class="text-sm text-gray-600 dark:text-gray-300 mb-2">{&tool.description}</p>
-                                        
+
                                         // Show parameter count
                                         <div class="text-xs text-gray-500 dark:text-gray-400">
                                             {
@@ -596,27 +602,27 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                                         </div>
                                     </div>
                                     <div class="flex space-x-2 ml-4">
-                                        <button 
+                                        <button
                                             onclick={toggle_click}
-                                            class={format!("text-xs px-3 py-1 rounded hover:opacity-80 transition-colors {}", 
-                                                if tool.enabled { 
-                                                    "bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400" 
-                                                } else { 
-                                                    "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400" 
+                                            class={format!("text-xs px-3 py-1 rounded hover:opacity-80 transition-colors {}",
+                                                if tool.enabled {
+                                                    "bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400"
+                                                } else {
+                                                    "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400"
                                                 }
                                             )}
                                             title={if tool.enabled { "Disable tool" } else { "Enable tool" }}
                                         >
                                             <i class={if tool.enabled { "fas fa-toggle-on" } else { "fas fa-toggle-off" }}></i>
                                         </button>
-                                        <button 
+                                        <button
                                             onclick={edit_click}
                                             class="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded hover:bg-blue-200 dark:hover:bg-blue-900/50"
                                             title="Edit function"
                                         >
                                             <i class="fas fa-edit"></i>
                                         </button>
-                                        <button 
+                                        <button
                                             onclick={delete_click}
                                             class="text-xs px-2 py-1 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded hover:bg-red-200 dark:hover:bg-red-900/50"
                                             title="Delete function"
@@ -628,15 +634,15 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                             </div>
                         }
                     })}
-                    
-                    <button 
+
+                    <button
                         onclick={add_function_tool}
                         class="flex items-center justify-center w-full p-3 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-md text-gray-500 dark:text-gray-400 hover:border-primary-500 hover:text-primary-500 dark:hover:border-primary-400 dark:hover:text-primary-400 transition-colors"
                     >
                         <i class="fas fa-plus mr-2"></i> {"Add Function Tool"}
                     </button>
                 </div>
-                
+
                 // MCP Settings
                 <div>
                     <h3 class="font-medium mb-4 text-gray-900 dark:text-gray-100">{"MCP Servers"}</h3>
@@ -675,10 +681,10 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                         on_mcp_client_change={props.on_mcp_client_change.clone()}
                     />
                 </div>
-                
+
                 // Save Button
                 <div class="pt-4">
-                    <button 
+                    <button
                         onclick={on_save}
                         class="w-full bg-primary-600 hover:bg-primary-700 text-white py-2 px-4 rounded-md"
                     >
@@ -686,7 +692,7 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                     </button>
                 </div>
             </div>
-            
+
             // Function Tool Editor Modal
             {if *show_function_editor {
                 let editing_tool = if let Some(index) = *editing_function_index {
@@ -694,7 +700,7 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                 } else {
                     None
                 };
-                
+
                 if *use_visual_editor {
                     html! {
                         <VisualFunctionToolEditor

@@ -1,12 +1,12 @@
 // MCP Settings Panel Component
-use yew::prelude::*;
+use std::collections::HashMap;
 use wasm_bindgen::JsCast;
 use web_sys::HtmlInputElement;
-use std::collections::HashMap;
+use yew::prelude::*;
 
 use crate::llm_playground::{
+    mcp_client::{McpClient, McpServerConfig},
     types::ApiConfig,
-    mcp_client::{McpServerConfig, McpClient},
 };
 
 #[derive(Properties, PartialEq)]
@@ -21,7 +21,7 @@ pub struct McpSettingsPanelProps {
 pub fn mcp_settings_panel(props: &McpSettingsPanelProps) -> Html {
     let config = props.config.clone();
     let mcp_config = config.get_mcp_config().clone();
-    
+
     let new_server_name = use_state(|| String::new());
     let new_server_url = use_state(|| String::new());
     let new_server_auth_token = use_state(|| String::new());
@@ -41,19 +41,20 @@ pub fn mcp_settings_panel(props: &McpSettingsPanelProps) -> Html {
         let new_server_headers_json = new_server_headers_json.clone();
         let show_add_server = show_add_server.clone();
         let editing_server = editing_server.clone();
-        
+
         Callback::from(move |_| {
             let name = (*new_server_name).clone();
             let url = (*new_server_url).clone();
             let auth_token = (*new_server_auth_token).clone();
             let headers_json = (*new_server_headers_json).clone();
-            
+
             if !name.is_empty() && !url.is_empty() {
                 let mut new_config = config.clone();
                 let mut headers = HashMap::new();
-                
+
                 // Parse custom headers from JSON
-                if let Ok(parsed_headers) = serde_json::from_str::<serde_json::Value>(&headers_json) {
+                if let Ok(parsed_headers) = serde_json::from_str::<serde_json::Value>(&headers_json)
+                {
                     if let Some(headers_obj) = parsed_headers.as_object() {
                         for (key, value) in headers_obj {
                             if let Some(value_str) = value.as_str() {
@@ -62,32 +63,39 @@ pub fn mcp_settings_panel(props: &McpSettingsPanelProps) -> Html {
                         }
                     }
                 }
-                
+
                 // Add auth token if provided (will override JSON if same key exists)
                 if !auth_token.is_empty() {
-                    headers.insert("Authorization".to_string(), format!("Bearer {}", auth_token));
+                    headers.insert(
+                        "Authorization".to_string(),
+                        format!("Bearer {}", auth_token),
+                    );
                 }
-                
+
                 let server_config = McpServerConfig {
                     name: name.clone(),
                     server_type: "http".to_string(),
                     url: Some(url),
-                    headers: if headers.is_empty() { None } else { Some(headers) },
+                    headers: if headers.is_empty() {
+                        None
+                    } else {
+                        Some(headers)
+                    },
                     enabled: true,
                 };
-                
+
                 let mut updated_mcp_config = new_config.get_mcp_config().clone();
-                
+
                 // Check if we're editing an existing server
                 if let Some(editing_name) = editing_server.as_ref() {
                     updated_mcp_config.servers.remove(editing_name);
                 }
-                
+
                 updated_mcp_config.servers.insert(name, server_config);
                 new_config.update_mcp_config(updated_mcp_config);
-                
+
                 on_config_change.emit(new_config);
-                
+
                 // Reset form
                 new_server_name.set(String::new());
                 new_server_url.set(String::new());
@@ -108,18 +116,18 @@ pub fn mcp_settings_panel(props: &McpSettingsPanelProps) -> Html {
         let new_server_headers_json = new_server_headers_json.clone();
         let show_add_server = show_add_server.clone();
         let editing_server = editing_server.clone();
-        
+
         Callback::from(move |server_name: String| {
             let mcp_config = config.get_mcp_config();
             if let Some(server_config) = mcp_config.servers.get(&server_name) {
                 // Populate form with existing values
                 new_server_name.set(server_config.name.clone());
                 new_server_url.set(server_config.url.clone().unwrap_or_default());
-                
+
                 // Extract auth token from headers if present
                 let mut auth_token = String::new();
                 let mut other_headers = HashMap::new();
-                
+
                 if let Some(headers) = &server_config.headers {
                     for (key, value) in headers {
                         if key == "Authorization" && value.starts_with("Bearer ") {
@@ -129,12 +137,13 @@ pub fn mcp_settings_panel(props: &McpSettingsPanelProps) -> Html {
                         }
                     }
                 }
-                
+
                 new_server_auth_token.set(auth_token);
                 new_server_headers_json.set(
-                    serde_json::to_string_pretty(&other_headers).unwrap_or_else(|_| "{}".to_string())
+                    serde_json::to_string_pretty(&other_headers)
+                        .unwrap_or_else(|_| "{}".to_string()),
                 );
-                
+
                 editing_server.set(Some(server_name));
                 show_add_server.set(true);
             }
@@ -145,18 +154,18 @@ pub fn mcp_settings_panel(props: &McpSettingsPanelProps) -> Html {
     let on_remove_server = {
         let config = config.clone();
         let on_config_change = props.on_config_change.clone();
-        
+
         Callback::from(move |server_name: String| {
             let mut new_config = config.clone();
             let mut updated_mcp_config = new_config.get_mcp_config().clone();
             updated_mcp_config.servers.remove(&server_name);
             new_config.update_mcp_config(updated_mcp_config);
-            
+
             // Also remove MCP tools from that server
-            new_config.function_tools.retain(|tool| {
-                !tool.name.starts_with(&format!("mcp_{}_", server_name))
-            });
-            
+            new_config
+                .function_tools
+                .retain(|tool| !tool.name.starts_with(&format!("mcp_{}_", server_name)));
+
             on_config_change.emit(new_config);
         })
     };
@@ -165,15 +174,15 @@ pub fn mcp_settings_panel(props: &McpSettingsPanelProps) -> Html {
     let on_toggle_server = {
         let config = config.clone();
         let on_config_change = props.on_config_change.clone();
-        
+
         Callback::from(move |(server_name, enabled): (String, bool)| {
             let mut new_config = config.clone();
             let mut updated_mcp_config = new_config.get_mcp_config().clone();
-            
+
             if let Some(server_config) = updated_mcp_config.servers.get_mut(&server_name) {
                 server_config.enabled = enabled;
             }
-            
+
             new_config.update_mcp_config(updated_mcp_config);
             on_config_change.emit(new_config);
         })
@@ -184,21 +193,21 @@ pub fn mcp_settings_panel(props: &McpSettingsPanelProps) -> Html {
         let config = config.clone();
         let on_mcp_client_change = props.on_mcp_client_change.clone();
         let connection_status = connection_status.clone();
-        
+
         Callback::from(move |_| {
             let mcp_config = config.get_mcp_config().clone();
-            
+
             // Only proceed if there are enabled servers
             let has_enabled_servers = mcp_config.servers.values().any(|server| server.enabled);
             if !has_enabled_servers {
                 gloo_console::log!("No enabled MCP servers to connect to");
                 return;
             }
-            
+
             let mut client = McpClient::new(mcp_config);
             let status = connection_status.clone();
             let callback = on_mcp_client_change.clone();
-            
+
             // Set status to "Connecting..." for enabled servers
             let mut connecting_status = (*status).clone();
             for (server_name, server_config) in client.get_config().servers.iter() {
@@ -207,7 +216,7 @@ pub fn mcp_settings_panel(props: &McpSettingsPanelProps) -> Html {
                 }
             }
             status.set(connecting_status);
-            
+
             wasm_bindgen_futures::spawn_local(async move {
                 match client.initialize().await {
                     Ok(_) => {
@@ -219,7 +228,9 @@ pub fn mcp_settings_panel(props: &McpSettingsPanelProps) -> Html {
                         }
                         status.set(new_status);
                         callback.emit(Some(client));
-                        gloo_console::log!("MCP client initialized successfully via manual connection");
+                        gloo_console::log!(
+                            "MCP client initialized successfully via manual connection"
+                        );
                     }
                     Err(e) => {
                         let mut new_status = (*status).clone();
@@ -230,7 +241,10 @@ pub fn mcp_settings_panel(props: &McpSettingsPanelProps) -> Html {
                         }
                         status.set(new_status);
                         callback.emit(None);
-                        gloo_console::log!("Failed to initialize MCP client via manual connection:", &e);
+                        gloo_console::log!(
+                            "Failed to initialize MCP client via manual connection:",
+                            &e
+                        );
                     }
                 }
             });
@@ -277,7 +291,7 @@ pub fn mcp_settings_panel(props: &McpSettingsPanelProps) -> Html {
                                 }
                             />
                         </div>
-                        
+
                         <div>
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                 {"Server URL"}
@@ -296,7 +310,7 @@ pub fn mcp_settings_panel(props: &McpSettingsPanelProps) -> Html {
                                 }
                             />
                         </div>
-                        
+
                         <div>
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                 {"Auth Token (Optional)"}
@@ -315,7 +329,7 @@ pub fn mcp_settings_panel(props: &McpSettingsPanelProps) -> Html {
                                 }
                             />
                         </div>
-                        
+
                         <div>
                             <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                                 {"Custom Headers (JSON)"}
@@ -337,7 +351,7 @@ pub fn mcp_settings_panel(props: &McpSettingsPanelProps) -> Html {
                                 {"Enter custom headers as JSON. Auth token above will override any Authorization header."}
                             </p>
                         </div>
-                        
+
                         <div class="flex justify-between pt-2">
                             <div class="flex space-x-2">
                                 <button
@@ -379,15 +393,15 @@ pub fn mcp_settings_panel(props: &McpSettingsPanelProps) -> Html {
                     mcp_config.servers.iter().map(|(name, server_config)| {
                         let server_name = name.clone();
                         let status = connection_status.get(name).cloned().unwrap_or_else(|| "Not connected".to_string());
-                        
+
                         html! {
                             <div key={name.clone()} class="p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
                                 <div class="flex items-start justify-between">
                                     <div class="flex-1 min-w-0">
                                         <div class="flex items-center space-x-3 mb-2">
                                             <h4 class="font-semibold text-gray-900 dark:text-gray-100">{name}</h4>
-                                            <span class={format!("px-2 py-1 text-xs font-medium rounded-full {}", 
-                                                if status.starts_with("Connected") { "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" } 
+                                            <span class={format!("px-2 py-1 text-xs font-medium rounded-full {}",
+                                                if status.starts_with("Connected") { "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" }
                                                 else if status.starts_with("Error") { "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200" }
                                                 else { "bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300" }
                                             )}>
@@ -410,7 +424,7 @@ pub fn mcp_settings_panel(props: &McpSettingsPanelProps) -> Html {
                                                 <span class="ml-2 text-sm text-gray-700 dark:text-gray-300">{"Enabled"}</span>
                                             </label>
                                         </div>
-                                        
+
                                         <div class="space-y-1 text-sm text-gray-600 dark:text-gray-400">
                                             <div class="flex items-center">
                                                 <span class="w-12 font-medium">{"URL:"}</span>
@@ -418,7 +432,7 @@ pub fn mcp_settings_panel(props: &McpSettingsPanelProps) -> Html {
                                                     {server_config.url.as_deref().unwrap_or("Not configured")}
                                                 </span>
                                             </div>
-                                            
+
                                             {if let Some(headers) = &server_config.headers {
                                                 if !headers.is_empty() {
                                                     html! {
@@ -433,7 +447,7 @@ pub fn mcp_settings_panel(props: &McpSettingsPanelProps) -> Html {
                                                                     } else {
                                                                         value.clone()
                                                                     };
-                                                                    
+
                                                                     html! {
                                                                         <div class="font-mono bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-xs">
                                                                             <span class="text-blue-600 dark:text-blue-400">{key}{": "}</span>
@@ -452,7 +466,7 @@ pub fn mcp_settings_panel(props: &McpSettingsPanelProps) -> Html {
                                             }}
                                         </div>
                                     </div>
-                                    
+
                                     <div class="flex items-center space-x-2 ml-4">
                                         <button
                                             class="px-3 py-1 bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"

@@ -1,7 +1,7 @@
 // UI notification component for showing temporary messages
-use yew::prelude::*;
 use gloo_timers::future::TimeoutFuture;
 use std::collections::HashMap;
+use yew::prelude::*;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum NotificationType {
@@ -40,7 +40,7 @@ pub fn notification_container(props: &NotificationProps) -> Html {
             {for notifications.values().map(|notification| {
                 let notification_id = notification.id.clone();
                 let on_dismiss_clone = on_dismiss.clone();
-                
+
                 let dismiss_callback = Callback::from(move |_: MouseEvent| {
                     on_dismiss_clone.emit(notification_id.clone());
                 });
@@ -98,9 +98,13 @@ impl NotificationMessage {
 
 // Hook for managing notifications
 #[hook]
-pub fn use_notifications() -> (HashMap<String, NotificationMessage>, Callback<NotificationMessage>, Callback<String>) {
+pub fn use_notifications() -> (
+    HashMap<String, NotificationMessage>,
+    Callback<NotificationMessage>,
+    Callback<String>,
+) {
     let notifications = use_state(|| HashMap::<String, NotificationMessage>::new());
-    
+
     let add_notification = {
         let notifications = notifications.clone();
         Callback::from(move |notification: NotificationMessage| {
@@ -108,10 +112,10 @@ pub fn use_notifications() -> (HashMap<String, NotificationMessage>, Callback<No
             let notification_id = notification.id.clone();
             let auto_dismiss = notification.auto_dismiss;
             let duration_ms = notification.duration_ms;
-            
+
             new_notifications.insert(notification.id.clone(), notification);
             notifications.set(new_notifications);
-            
+
             // Auto-dismiss if configured
             if auto_dismiss {
                 let notifications_clone = notifications.clone();
@@ -124,7 +128,7 @@ pub fn use_notifications() -> (HashMap<String, NotificationMessage>, Callback<No
             }
         })
     };
-    
+
     let dismiss_notification = {
         let notifications = notifications.clone();
         Callback::from(move |notification_id: String| {
@@ -133,6 +137,10 @@ pub fn use_notifications() -> (HashMap<String, NotificationMessage>, Callback<No
             notifications.set(new_notifications);
         })
     };
-    
-    ((*notifications).clone(), add_notification, dismiss_notification)
+
+    (
+        (*notifications).clone(),
+        add_notification,
+        dismiss_notification,
+    )
 }

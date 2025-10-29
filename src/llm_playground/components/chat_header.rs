@@ -1,5 +1,5 @@
+use crate::llm_playground::{ApiConfig, ApiProvider, ChatSession};
 use yew::prelude::*;
-use crate::llm_playground::{ChatSession, ApiConfig, ApiProvider};
 
 #[derive(Properties, PartialEq)]
 pub struct ChatHeaderProps {
@@ -27,9 +27,15 @@ pub fn chat_header(props: &ChatHeaderProps) -> Html {
             ApiProvider::Gemini => "Gemini",
             ApiProvider::OpenAI => "OpenAI",
         };
-        (session.title.clone(), format!("Using {} {}", provider, model))
+        (
+            session.title.clone(),
+            format!("Using {} {}", provider, model),
+        )
     } else {
-        ("No Session Selected".to_string(), "Select or create a session to start chatting".to_string())
+        (
+            "No Session Selected".to_string(),
+            "Select or create a session to start chatting".to_string(),
+        )
     };
 
     html! {
@@ -39,7 +45,7 @@ pub fn chat_header(props: &ChatHeaderProps) -> Html {
                 <div class="text-sm text-gray-600 dark:text-gray-300">{model_info}</div>
             </div>
             <div class="flex space-x-2">
-                <button 
+                <button
                     onclick={on_dark_mode_toggle}
                     class="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
                     title="Toggle dark mode"

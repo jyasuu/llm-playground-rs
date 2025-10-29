@@ -1,9 +1,9 @@
 // Built-in function tools with real implementations
 use serde_json::Value;
+use std::collections::HashMap;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{Request, RequestInit, RequestMode, Response};
-use std::collections::HashMap;
 
 use crate::llm_playground::mcp_client::McpClient;
 
@@ -20,14 +20,14 @@ pub async fn execute_builtin_tool(
     mcp_client: Option<&McpClient>,
 ) -> Result<Value, String> {
     log(&format!("execute_builtin_tool called with: {}", tool_name));
-    
+
     // Check if this is an MCP tool
     if let Some(client) = mcp_client {
         if client.is_mcp_tool(tool_name) {
             return client.call_tool(tool_name, arguments).await;
         }
     }
-    
+
     // Handle built-in tools
     match tool_name {
         "fetch" => execute_fetch(arguments).await,
@@ -54,9 +54,7 @@ async fn execute_fetch(arguments: &Value) -> Result<Value, String> {
         .cloned()
         .unwrap_or_default();
 
-    let payload = arguments
-        .get("payload")
-        .and_then(|v| v.as_str());
+    let payload = arguments.get("payload").and_then(|v| v.as_str());
 
     // Log the request for debugging
     log(&format!("Making {} request to: {}", method, url));
@@ -100,7 +98,7 @@ async fn execute_fetch(arguments: &Value) -> Result<Value, String> {
     // Extract response status and headers
     let status = resp.status();
     let status_text = resp.status_text();
-    
+
     // Get response headers
     let mut response_headers = HashMap::new();
     let headers_iterator = resp.headers().entries();
@@ -122,11 +120,14 @@ async fn execute_fetch(arguments: &Value) -> Result<Value, String> {
 
     // Get response body
     let body_text = if resp.body().is_some() {
-        JsFuture::from(resp.text().map_err(|e| format!("Failed to get response text: {:?}", e))?)
-            .await
-            .map_err(|e| format!("Failed to read response body: {:?}", e))?
-            .as_string()
-            .unwrap_or_default()
+        JsFuture::from(
+            resp.text()
+                .map_err(|e| format!("Failed to get response text: {:?}", e))?,
+        )
+        .await
+        .map_err(|e| format!("Failed to read response body: {:?}", e))?
+        .as_string()
+        .unwrap_or_default()
     } else {
         String::new()
     };

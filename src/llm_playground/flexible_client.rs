@@ -1,6 +1,11 @@
 // Flexible LLM client that can work with any provider configuration
-use crate::llm_playground::{Message, provider_config::{FlexibleApiConfig, ProviderConfig}};
-use crate::llm_playground::api_clients::{LLMClient, LLMResponse, StreamCallback, GeminiClient, OpenAIClient};
+use crate::llm_playground::api_clients::{
+    GeminiClient, LLMClient, LLMResponse, OpenAIClient, StreamCallback,
+};
+use crate::llm_playground::{
+    provider_config::{FlexibleApiConfig, ProviderConfig},
+    Message,
+};
 use std::future::Future;
 use std::pin::Pin;
 use web_sys::js_sys;
@@ -25,10 +30,15 @@ impl FlexibleLLMClient {
     }
 
     /// Create a temporary config for the legacy API
-    fn create_legacy_config(&self, provider: &ProviderConfig, config: &FlexibleApiConfig, model: &str) -> crate::llm_playground::ApiConfig {
-        use crate::llm_playground::{ApiConfig, ApiProvider, GeminiConfig, OpenAIConfig};
+    fn create_legacy_config(
+        &self,
+        provider: &ProviderConfig,
+        config: &FlexibleApiConfig,
+        model: &str,
+    ) -> crate::llm_playground::ApiConfig {
         use crate::llm_playground::mcp_client::McpConfig;
-        
+        use crate::llm_playground::{ApiConfig, ApiProvider, GeminiConfig, OpenAIConfig};
+
         if provider.transformer.r#use.contains(&"gemini".to_string()) {
             ApiConfig {
                 current_provider: ApiProvider::Gemini,
@@ -47,7 +57,11 @@ impl FlexibleLLMClient {
                     retry_delay: config.shared_settings.retry_delay,
                 },
                 system_prompt: config.system_prompt.clone(),
-                function_tools: config.get_enabled_function_tools().into_iter().cloned().collect(),
+                function_tools: config
+                    .get_enabled_function_tools()
+                    .into_iter()
+                    .cloned()
+                    .collect(),
                 structured_outputs: config.structured_outputs.clone(),
                 mcp_config: McpConfig::default(),
             }
@@ -70,7 +84,11 @@ impl FlexibleLLMClient {
                     retry_delay: config.shared_settings.retry_delay,
                 },
                 system_prompt: config.system_prompt.clone(),
-                function_tools: config.get_enabled_function_tools().into_iter().cloned().collect(),
+                function_tools: config
+                    .get_enabled_function_tools()
+                    .into_iter()
+                    .cloned()
+                    .collect(),
                 structured_outputs: config.structured_outputs.clone(),
                 mcp_config: McpConfig::default(),
             }
@@ -83,15 +101,13 @@ impl FlexibleLLMClient {
         config: &FlexibleApiConfig,
     ) -> Pin<Box<dyn Future<Output = Result<LLMResponse, String>>>> {
         let (provider_name, model_name) = config.get_current_provider_and_model();
-        
+
         if let Some(provider) = config.get_provider(&provider_name) {
             let client = self.get_client_for_provider(provider);
             let legacy_config = self.create_legacy_config(provider, config, &model_name);
             client.send_message(messages, &legacy_config)
         } else {
-            Box::pin(async move {
-                Err(format!("Provider '{}' not found", provider_name))
-            })
+            Box::pin(async move { Err(format!("Provider '{}' not found", provider_name)) })
         }
     }
 
@@ -102,15 +118,13 @@ impl FlexibleLLMClient {
         callback: StreamCallback,
     ) -> Pin<Box<dyn Future<Output = Result<(), String>>>> {
         let (provider_name, model_name) = config.get_current_provider_and_model();
-        
+
         if let Some(provider) = config.get_provider(&provider_name) {
             let client = self.get_client_for_provider(provider);
             let legacy_config = self.create_legacy_config(provider, config, &model_name);
             client.send_message_stream(messages, &legacy_config, callback)
         } else {
-            Box::pin(async move {
-                Err(format!("Provider '{}' not found", provider_name))
-            })
+            Box::pin(async move { Err(format!("Provider '{}' not found", provider_name)) })
         }
     }
 
@@ -119,15 +133,13 @@ impl FlexibleLLMClient {
         config: &FlexibleApiConfig,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<String>, String>>>> {
         let (provider_name, _) = config.get_current_provider_and_model();
-        
+
         if let Some(provider) = config.get_provider(&provider_name) {
             let client = self.get_client_for_provider(provider);
             let legacy_config = self.create_legacy_config(provider, config, &provider.models[0]);
             client.get_available_models(&legacy_config)
         } else {
-            Box::pin(async move {
-                Err(format!("Provider '{}' not found", provider_name))
-            })
+            Box::pin(async move { Err(format!("Provider '{}' not found", provider_name)) })
         }
     }
 
@@ -154,13 +166,21 @@ impl FlexibleLLMClient {
         if provider.transformer.r#use.is_empty() {
             return Err("Transformer configuration cannot be empty".to_string());
         }
-        
+
         // Check if transformer type is supported
         let supported_transformers = ["openai", "gemini"];
-        if !provider.transformer.r#use.iter().any(|t| supported_transformers.contains(&t.as_str())) {
-            return Err(format!("Unsupported transformer type. Supported: {:?}", supported_transformers));
+        if !provider
+            .transformer
+            .r#use
+            .iter()
+            .any(|t| supported_transformers.contains(&t.as_str()))
+        {
+            return Err(format!(
+                "Unsupported transformer type. Supported: {:?}",
+                supported_transformers
+            ));
         }
-        
+
         Ok(())
     }
 
@@ -176,18 +196,16 @@ impl FlexibleLLMClient {
 
         let client = self.get_client_for_provider(provider);
         let legacy_config = self.create_legacy_config(provider, config, &provider.models[0]);
-        
+
         // Send a simple test message
-        let test_messages = vec![
-            Message {
-                id: "test".to_string(),
-                role: crate::llm_playground::MessageRole::User,
-                content: "Hello, this is a connection test.".to_string(),
-                timestamp: js_sys::Date::now(),
-                function_call: None,
-                function_response: None,
-            }
-        ];
+        let test_messages = vec![Message {
+            id: "test".to_string(),
+            role: crate::llm_playground::MessageRole::User,
+            content: "Hello, this is a connection test.".to_string(),
+            timestamp: js_sys::Date::now(),
+            function_call: None,
+            function_response: None,
+        }];
 
         Box::pin(async move {
             match client.send_message(&test_messages, &legacy_config).await {

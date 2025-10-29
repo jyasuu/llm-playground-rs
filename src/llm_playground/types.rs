@@ -1,6 +1,6 @@
 // Type definitions for LLM Playground
-use serde::{Deserialize, Serialize};
 use crate::llm_playground::mcp_client::McpConfig;
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum ApiProvider {
@@ -718,17 +718,24 @@ impl ApiConfig {
 
     /// Get enabled function tools only
     pub fn get_enabled_function_tools(&self) -> Vec<&FunctionTool> {
-        self.function_tools.iter().filter(|tool| tool.enabled).collect()
+        self.function_tools
+            .iter()
+            .filter(|tool| tool.enabled)
+            .collect()
     }
 
     /// Get function tools by category
     pub fn get_function_tools_by_category(&self, category: &str) -> Vec<&FunctionTool> {
-        self.function_tools.iter().filter(|tool| tool.category == category).collect()
+        self.function_tools
+            .iter()
+            .filter(|tool| tool.category == category)
+            .collect()
     }
 
     /// Get all available categories
     pub fn get_function_tool_categories(&self) -> Vec<String> {
-        let mut categories: Vec<String> = self.function_tools
+        let mut categories: Vec<String> = self
+            .function_tools
             .iter()
             .map(|tool| tool.category.clone())
             .collect::<std::collections::HashSet<_>>()
@@ -758,8 +765,9 @@ impl ApiConfig {
     /// Add MCP tools to the function tools list
     pub fn add_mcp_tools(&mut self, mcp_tools: Vec<FunctionTool>) {
         // Remove existing MCP tools first
-        self.function_tools.retain(|tool| !tool.name.starts_with("mcp_"));
-        
+        self.function_tools
+            .retain(|tool| !tool.name.starts_with("mcp_"));
+
         // Add new MCP tools
         self.function_tools.extend(mcp_tools);
     }

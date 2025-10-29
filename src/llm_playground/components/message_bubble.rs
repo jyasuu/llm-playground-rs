@@ -1,5 +1,5 @@
-use yew::prelude::*;
 use crate::llm_playground::{Message, MessageRole};
+use yew::prelude::*;
 
 #[derive(Properties, PartialEq)]
 pub struct MessageBubbleProps {
@@ -13,25 +13,25 @@ pub fn message_bubble(props: &MessageBubbleProps) -> Html {
             "bg-yellow-100 dark:bg-yellow-900/50",
             "bg-yellow-50 dark:bg-yellow-900/30",
             "System",
-            "fas fa-cog text-yellow-600 dark:text-yellow-300"
+            "fas fa-cog text-yellow-600 dark:text-yellow-300",
         ),
         MessageRole::User => (
             "bg-blue-100 dark:bg-blue-900/50",
             "bg-blue-50 dark:bg-blue-900/30",
             "You",
-            "fas fa-user text-blue-600 dark:text-blue-300"
+            "fas fa-user text-blue-600 dark:text-blue-300",
         ),
         MessageRole::Assistant => (
             "bg-purple-100 dark:bg-purple-900/50",
             "bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600",
             "Assistant",
-            "fas fa-robot text-purple-600 dark:text-purple-300"
+            "fas fa-robot text-purple-600 dark:text-purple-300",
         ),
         MessageRole::Function => (
             "bg-green-100 dark:bg-green-900/50",
             "bg-green-50 dark:bg-green-900/30",
             "Function",
-            "fas fa-code text-green-600 dark:text-green-300"
+            "fas fa-code text-green-600 dark:text-green-300",
         ),
     };
 
@@ -42,12 +42,12 @@ pub fn message_bubble(props: &MessageBubbleProps) -> Html {
             </div>
             <div class={classes!("flex-1", "rounded-lg", "p-4", bg_class)}>
                 <div class="font-medium mb-1 text-gray-900 dark:text-gray-100">{label}</div>
-                
+
                 // Regular message content
                 <div class="message-content text-sm text-gray-800 dark:text-gray-200">
                     {render_content(&props.message.content)}
                 </div>
-                
+
                 // Function call display
                 {if let Some(function_call) = &props.message.function_call {
                     // Handle function calls as an array
@@ -67,7 +67,7 @@ pub fn message_bubble(props: &MessageBubbleProps) -> Html {
                                                     }}
                                                 </span>
                                             </div>
-                                            
+
                                             {if let Some(name) = fc.get("name") {
                                                 html! {
                                                     <div class="mb-2">
@@ -80,7 +80,7 @@ pub fn message_bubble(props: &MessageBubbleProps) -> Html {
                                             } else {
                                                 html! {}
                                             }}
-                                            
+
                                             {if let Some(args) = fc.get("arguments") {
                                                 html! {
                                                     <div>
@@ -127,7 +127,7 @@ pub fn message_bubble(props: &MessageBubbleProps) -> Html {
                                     <i class="fas fa-play-circle text-orange-600 dark:text-orange-400 mr-2"></i>
                                     <span class="font-semibold text-orange-800 dark:text-orange-300">{"Function Call Invoked"}</span>
                                 </div>
-                                
+
                                 {if let Some(name) = function_call.get("name") {
                                     html! {
                                         <div class="mb-2">
@@ -140,7 +140,7 @@ pub fn message_bubble(props: &MessageBubbleProps) -> Html {
                                 } else {
                                     html! {}
                                 }}
-                                
+
                                 {if let Some(args) = function_call.get("arguments") {
                                     html! {
                                         <div>
@@ -180,7 +180,7 @@ pub fn message_bubble(props: &MessageBubbleProps) -> Html {
                 } else {
                     html! {}
                 }}
-                
+
                 // Function response display
                 {if let Some(function_response) = &props.message.function_response {
                     html! {
@@ -189,7 +189,7 @@ pub fn message_bubble(props: &MessageBubbleProps) -> Html {
                                 <i class="fas fa-check-circle text-green-600 dark:text-green-400 mr-2"></i>
                                 <span class="font-semibold text-green-800 dark:text-green-300">{"Function Response"}</span>
                             </div>
-                            
+
                             {if let Some(name) = function_response.get("name") {
                                 html! {
                                     <div class="mb-2">
@@ -202,7 +202,7 @@ pub fn message_bubble(props: &MessageBubbleProps) -> Html {
                             } else {
                                 html! {}
                             }}
-                            
+
                             {if let Some(response) = function_response.get("response") {
                                 html! {
                                     <div>
@@ -228,7 +228,7 @@ pub fn message_bubble(props: &MessageBubbleProps) -> Html {
                 } else {
                     html! {}
                 }}
-                
+
                 // Timestamp
                 <div class="text-xs text-gray-600 dark:text-gray-300 mt-2">
                     {format_timestamp(props.message.timestamp)}
@@ -248,7 +248,7 @@ fn parse_markdown(content: &str) -> Html {
     let mut in_code_block = false;
     let mut code_block_content = Vec::new();
     let mut code_block_language = String::new();
-    
+
     for line in content.split('\n') {
         if line.trim().starts_with("```") {
             if in_code_block {
@@ -274,7 +274,7 @@ fn parse_markdown(content: &str) -> Html {
             lines.push(render_line(line));
         }
     }
-    
+
     html! {
         <div class="space-y-2">
             {for lines}
@@ -286,7 +286,7 @@ fn render_line(line: &str) -> Html {
     if line.trim().is_empty() {
         return html! { <div class="h-2"></div> };
     }
-    
+
     if line.starts_with("🔧 ") {
         // Function call header
         return html! {
@@ -296,7 +296,7 @@ fn render_line(line: &str) -> Html {
             </div>
         };
     }
-    
+
     if line.starts_with("**") && line.ends_with("**:") {
         // Section headers like **Arguments**: or **Response**:
         let content = line.trim_start_matches("**").trim_end_matches("**:");
@@ -306,19 +306,19 @@ fn render_line(line: &str) -> Html {
             </div>
         };
     }
-    
+
     if line.starts_with("# ") {
         return html! {
             <h1 class="text-xl font-bold my-3 text-gray-900 dark:text-gray-100">{line.trim_start_matches("# ")}</h1>
         };
     }
-    
+
     if line.starts_with("## ") {
         return html! {
             <h2 class="text-lg font-semibold my-2 text-gray-800 dark:text-gray-200">{line.trim_start_matches("## ")}</h2>
         };
     }
-    
+
     if line.starts_with("- ") {
         return html! {
             <div class="flex items-start space-x-2 ml-4">
@@ -327,7 +327,7 @@ fn render_line(line: &str) -> Html {
             </div>
         };
     }
-    
+
     html! {
         <p class="text-gray-800 dark:text-gray-200 leading-relaxed">{render_inline_formatting(line)}</p>
     }
@@ -337,7 +337,7 @@ fn render_inline_formatting(text: &str) -> Html {
     let mut result = Vec::new();
     let mut chars = text.chars().peekable();
     let mut current_text = String::new();
-    
+
     while let Some(ch) = chars.next() {
         if ch == '`' {
             // Handle inline code
@@ -345,7 +345,7 @@ fn render_inline_formatting(text: &str) -> Html {
                 result.push(html! { <span>{current_text.clone()}</span> });
                 current_text.clear();
             }
-            
+
             let mut code_content = String::new();
             while let Some(next_ch) = chars.next() {
                 if next_ch == '`' {
@@ -353,7 +353,7 @@ fn render_inline_formatting(text: &str) -> Html {
                 }
                 code_content.push(next_ch);
             }
-            
+
             result.push(html! {
                 <code class="bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 px-2 py-1 rounded text-sm font-mono">
                     {code_content}
@@ -362,15 +362,15 @@ fn render_inline_formatting(text: &str) -> Html {
         } else if ch == '*' && chars.peek() == Some(&'*') {
             // Handle bold text
             chars.next(); // consume second *
-            
+
             if !current_text.is_empty() {
                 result.push(html! { <span>{current_text.clone()}</span> });
                 current_text.clear();
             }
-            
+
             let mut bold_content = String::new();
             let mut found_end = false;
-            
+
             while let Some(next_ch) = chars.next() {
                 if next_ch == '*' && chars.peek() == Some(&'*') {
                     chars.next(); // consume second *
@@ -379,7 +379,7 @@ fn render_inline_formatting(text: &str) -> Html {
                 }
                 bold_content.push(next_ch);
             }
-            
+
             if found_end {
                 result.push(html! {
                     <strong class="font-semibold text-gray-900 dark:text-gray-100">{bold_content}</strong>
@@ -392,11 +392,11 @@ fn render_inline_formatting(text: &str) -> Html {
             current_text.push(ch);
         }
     }
-    
+
     if !current_text.is_empty() {
         result.push(html! { <span>{current_text}</span> });
     }
-    
+
     if result.is_empty() {
         html! { <span>{text}</span> }
     } else {
