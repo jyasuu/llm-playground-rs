@@ -10,7 +10,7 @@ use std::future::Future;
 use std::pin::Pin;
 use web_sys::js_sys;
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct FlexibleLLMClient;
 
 impl FlexibleLLMClient {

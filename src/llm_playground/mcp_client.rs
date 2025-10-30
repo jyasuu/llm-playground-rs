@@ -61,7 +61,7 @@ pub struct McpError {
     pub data: Option<Value>,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct McpClient {
     config: McpConfig,
     available_tools: HashMap<String, McpTool>,

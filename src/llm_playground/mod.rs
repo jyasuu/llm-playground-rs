@@ -2,16 +2,26 @@
 pub mod api_clients;
 pub mod builtin_tools;
 pub mod components;
+pub mod event_system;
 pub mod flexible_client;
 pub mod flexible_playground;
+pub mod flexible_playground_refactored;
+pub mod flexible_playground_simple;
+pub mod function_executor;
+pub mod llm_processor;
 pub mod mcp_client;
+pub mod message_handler;
+pub mod orchestrator;
 pub mod provider_config;
+pub mod simple_orchestrator;
 pub mod storage;
 pub mod types;
 
 pub use api_clients::*;
 pub use components::*;
 pub use flexible_playground::FlexibleLLMPlayground;
+pub use flexible_playground_refactored::FlexibleLLMPlaygroundRefactored;
+pub use flexible_playground_simple::FlexibleLLMPlaygroundSimple;
 pub use provider_config::FlexibleApiConfig;
 pub use storage::*;
 pub use types::*;
