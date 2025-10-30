@@ -8,10 +8,17 @@ pub mod mcp_client;
 pub mod provider_config;
 pub mod storage;
 pub mod types;
+// Event-driven message handling modules
+pub mod message_flow;
+pub mod message_handlers;
+pub mod flexible_playground_refactored;
+pub mod simple_message_flow;
+pub mod logging;
 
 pub use api_clients::*;
 pub use components::*;
 pub use flexible_playground::FlexibleLLMPlayground;
+pub use flexible_playground_refactored::FlexibleLLMPlaygroundRefactored;
 pub use provider_config::FlexibleApiConfig;
 pub use storage::*;
 pub use types::*;

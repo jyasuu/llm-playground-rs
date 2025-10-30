@@ -5,6 +5,7 @@ use gloo_timers::future::TimeoutFuture;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use wasm_bindgen::JsCast;
+use crate::llm_playground::logging::{ProcessLogger, PerformanceTimer, SessionLogger, PerformanceMonitor};
 use yew::prelude::*;
 
 use crate::llm_playground::{
@@ -24,6 +25,25 @@ const STORAGE_KEY_DARK_MODE: &str = "llm_playground_dark_mode";
 
 #[function_component(FlexibleLLMPlayground)]
 pub fn flexible_llm_playground() -> Html {
+    // Initialize performance monitoring
+    {
+        use_effect_with((), |_| {
+            let logger = ProcessLogger::new("FlexibleLLMPlayground");
+            logger.log_user_action("component_mounted", Some(serde_json::json!({
+                "timestamp": js_sys::Date::now(),
+                "user_agent": "wasm_environment"
+            })));
+            
+            PerformanceMonitor::start_resource_monitoring();
+            PerformanceMonitor::log_navigation_timing();
+            
+            || {
+                let logger = ProcessLogger::new("FlexibleLLMPlayground");
+                logger.log_user_action("component_unmounted", None);
+            }
+        });
+    }
+
     // State management
     let sessions = use_state(|| HashMap::<String, ChatSession>::new());
     let current_session_id = use_state(|| Option::<String>::None);
@@ -35,6 +55,9 @@ pub fn flexible_llm_playground() -> Html {
     let is_loading = use_state(|| false);
     let llm_client = use_state(|| FlexibleLLMClient::new());
     let mcp_client = use_state(|| Option::<McpClient>::None);
+
+    // Session logger for tracking conversation metrics
+    let session_logger = use_state(|| Option::<SessionLogger>::None);
 
     // Notification system
     let (notifications, add_notification, dismiss_notification) = use_notifications();
@@ -250,9 +273,18 @@ pub fn flexible_llm_playground() -> Html {
         let current_session_id = current_session_id.clone();
         let api_config = api_config.clone();
         let show_model_selector = show_model_selector.clone();
+        let session_logger = session_logger.clone();
         Callback::from(move |(provider_name, model_name): (String, String)| {
             let session_id = format!("session_{}", js_sys::Date::now() as u64);
             let session_title = format!("{} - {}", provider_name, model_name);
+
+            let logger = ProcessLogger::new("SessionManagement");
+            logger.log_user_action("new_session_created", Some(serde_json::json!({
+                "session_id": session_id,
+                "provider": provider_name,
+                "model": model_name,
+                "timestamp": js_sys::Date::now()
+            })));
 
             let new_session = ChatSession {
                 id: session_id.clone(),
@@ -272,6 +304,9 @@ pub fn flexible_llm_playground() -> Html {
             let mut new_sessions = (*sessions).clone();
             new_sessions.insert(session_id.clone(), new_session);
             sessions.set(new_sessions);
+            
+            // Initialize session logger
+            session_logger.set(Some(SessionLogger::new(&session_id)));
             current_session_id.set(Some(session_id));
             show_model_selector.set(false);
         })
@@ -286,7 +321,16 @@ pub fn flexible_llm_playground() -> Html {
 
     let switch_session = {
         let current_session_id = current_session_id.clone();
+        let session_logger = session_logger.clone();
         Callback::from(move |session_id: String| {
+            let logger = ProcessLogger::new("SessionManagement");
+            logger.log_user_action("session_switched", Some(serde_json::json!({
+                "new_session_id": session_id,
+                "timestamp": js_sys::Date::now()
+            })));
+            
+            // Create new session logger for the switched session
+            session_logger.set(Some(SessionLogger::new(&session_id)));
             current_session_id.set(Some(session_id));
         })
     };
@@ -383,7 +427,7 @@ pub fn flexible_llm_playground() -> Html {
         base_delay * (2_u32.pow(attempt.min(5))) // Cap at 2^5 to prevent excessive delays
     };
 
-    // Message handling
+    // Message handling with comprehensive logging
     let send_message = {
         let sessions = sessions.clone();
         let current_session_id = current_session_id.clone();
@@ -393,14 +437,33 @@ pub fn flexible_llm_playground() -> Html {
         let llm_client = llm_client.clone();
         let mcp_client = mcp_client.clone();
         let add_notification = add_notification.clone();
+        let session_logger = session_logger.clone();
 
         Callback::from(move |_| {
             let sessions = sessions.clone();
             let add_notification = add_notification.clone();
+            let session_logger = session_logger.clone();
+            
             if let Some(session_id) = current_session_id.as_ref() {
                 let message_content = (*current_message).clone();
                 if message_content.trim().is_empty() {
+                    let logger = ProcessLogger::new("MessageHandler").with_session(session_id);
+                    logger.log_warning("empty_message_attempted", Some(serde_json::json!({
+                        "message_length": message_content.len()
+                    })));
                     return;
+                }
+
+                // Start message flow timer
+                let flow_timer = PerformanceTimer::start(
+                    ProcessLogger::new("MessageFlow").with_session(session_id),
+                    "complete_message_flow"
+                );
+
+                // Log user message submission
+                if let Some(mut sess_logger) = (*session_logger).clone() {
+                    sess_logger.log_message_sent(&message_content, "user");
+                    session_logger.set(Some(sess_logger));
                 }
 
                 let user_message = Message {
@@ -433,6 +496,15 @@ pub fn flexible_llm_playground() -> Html {
                     if let Some(session) = new_sessions.get(&session_id_clone) {
                         let mut current_messages = session.messages.clone();
 
+                        // Log conversation context
+                        let conv_logger = ProcessLogger::new("ConversationFlow").with_session(&session_id_clone);
+                        conv_logger.log(crate::llm_playground::logging::LogLevel::Info, 
+                            "conversation_context_prepared", Some(serde_json::json!({
+                            "message_count": current_messages.len(),
+                            "has_system_prompt": !config.system_prompt.trim().is_empty(),
+                            "function_tools_available": config.function_tools.len()
+                        })));
+
                         // Add system message if exists
                         if !config.system_prompt.trim().is_empty() {
                             current_messages.insert(
@@ -446,14 +518,38 @@ pub fn flexible_llm_playground() -> Html {
                                     function_response: None,
                                 },
                             );
+                            conv_logger.log(crate::llm_playground::logging::LogLevel::Debug, 
+                                "system_prompt_added", Some(serde_json::json!({
+                                "system_prompt_length": config.system_prompt.len()
+                            })));
                         }
 
                         // Handle function calls automatically with feedback loop
                         let mut final_response = String::new();
+                        let mut total_api_calls = 0u32;
+                        let mut total_function_calls = 0u32;
 
                         loop {
+                            total_api_calls += 1;
                             let mut retry_attempt = 0u32;
                             let max_retries = 3u32;
+
+                            // Log API call initiation
+                            let (provider_name, model_name) = config.get_current_provider_and_model();
+                            let api_timer = PerformanceTimer::start(
+                                ProcessLogger::new("APICall").with_session(&session_id_clone),
+                                &format!("api_call_{}", total_api_calls)
+                            );
+
+                            if let Some(mut sess_logger) = session_logger.as_ref().and_then(|sl| Some((*sl).clone())) {
+                                sess_logger.log_api_request(&provider_name, &model_name, Some(serde_json::json!({
+                                    "message_count": current_messages.len(),
+                                    "attempt": total_api_calls,
+                                    "temperature": config.shared_settings.temperature,
+                                    "max_tokens": config.shared_settings.max_tokens
+                                })));
+                                session_logger.set(Some(sess_logger));
+                            }
 
                             let api_result = loop {
                                 match client.send_message(&current_messages, &config).await {
@@ -515,6 +611,21 @@ pub fn flexible_llm_playground() -> Html {
 
                             match api_result {
                                 Ok(response) => {
+                                    // Log successful API response
+                                    let api_duration = api_timer.finish(Some(serde_json::json!({
+                                        "response_content_length": response.content.as_ref().map(|c| c.len()).unwrap_or(0),
+                                        "function_calls_count": response.function_calls.len(),
+                                        "has_content": response.content.is_some()
+                                    })));
+
+                                    if let Some(mut sess_logger) = session_logger.as_ref().and_then(|sl| Some((*sl).clone())) {
+                                        sess_logger.log_api_response(&provider_name, &model_name, api_duration, true, Some(serde_json::json!({
+                                            "content_length": response.content.as_ref().map(|c| c.len()).unwrap_or(0),
+                                            "function_calls": response.function_calls.len()
+                                        })));
+                                        session_logger.set(Some(sess_logger));
+                                    }
+
                                     // Add any text content to final response
                                     if let Some(content) = &response.content {
                                         if !final_response.is_empty() {
@@ -525,6 +636,12 @@ pub fn flexible_llm_playground() -> Html {
 
                                     // If no function calls, we're done
                                     if response.function_calls.is_empty() {
+                                        conv_logger.log(crate::llm_playground::logging::LogLevel::Info, 
+                                            "conversation_completed", Some(serde_json::json!({
+                                            "total_api_calls": total_api_calls,
+                                            "total_function_calls": total_function_calls,
+                                            "final_response_length": final_response.len()
+                                        })));
                                         break;
                                     }
 
@@ -588,6 +705,23 @@ pub fn flexible_llm_playground() -> Html {
 
                                     // Execute each function call and add responses
                                     for function_call in &response.function_calls {
+                                        total_function_calls += 1;
+                                        
+                                        // Start function execution timer
+                                        let func_timer = PerformanceTimer::start(
+                                            ProcessLogger::new("FunctionExecution").with_session(&session_id_clone),
+                                            &format!("function_{}_{}", function_call.name, total_function_calls)
+                                        );
+
+                                        conv_logger.log_function_call(
+                                            &function_call.name, 
+                                            &function_call.arguments,
+                                            Some(serde_json::json!({
+                                                "function_call_index": total_function_calls,
+                                                "total_in_batch": response.function_calls.len()
+                                            }))
+                                        );
+
                                         // Check if this is a built-in tool and execute it properly
                                         let response_value = if let Some(tool) = config
                                             .function_tools
@@ -596,23 +730,71 @@ pub fn flexible_llm_playground() -> Html {
                                         {
                                             if tool.is_builtin {
                                                 // Execute built-in tool with real functionality (including MCP tools)
-                                                log!(
-                                                    "Executing built-in tool: {}",
-                                                    &function_call.name
-                                                );
+                                                conv_logger.log(crate::llm_playground::logging::LogLevel::Debug,
+                                                    "executing_builtin_tool", Some(serde_json::json!({
+                                                    "tool_name": function_call.name,
+                                                    "is_mcp_available": mcp_client.is_some()
+                                                })));
+                                                
                                                 match crate::llm_playground::builtin_tools::execute_builtin_tool(&function_call.name, &function_call.arguments, mcp_client.as_ref()).await {
-                                                    Ok(result) => result,
-                                                    Err(error) => serde_json::json!({"error": error}),
+                                                    Ok(result) => {
+                                                        conv_logger.log(crate::llm_playground::logging::LogLevel::Info,
+                                                            "builtin_tool_success", Some(serde_json::json!({
+                                                            "tool_name": function_call.name,
+                                                            "result_size": serde_json::to_string(&result).unwrap_or_default().len()
+                                                        })));
+                                                        result
+                                                    },
+                                                    Err(error) => {
+                                                        conv_logger.log_error(&format!("builtin_tool_error: {}", error), Some(serde_json::json!({
+                                                            "tool_name": function_call.name,
+                                                            "error": error
+                                                        })));
+                                                        serde_json::json!({"error": error})
+                                                    },
                                                 }
                                             } else {
                                                 // Use mock response for regular tools
+                                                conv_logger.log(crate::llm_playground::logging::LogLevel::Debug,
+                                                    "using_mock_response", Some(serde_json::json!({
+                                                    "tool_name": function_call.name,
+                                                    "mock_response_length": tool.mock_response.len()
+                                                })));
+                                                
                                                 serde_json::from_str(&tool.mock_response)
                                                     .unwrap_or_else(|_| serde_json::json!({"result": tool.mock_response.clone()}))
                                             }
                                         } else {
                                             // Unknown tool
+                                            conv_logger.log_warning("unknown_function_tool", Some(serde_json::json!({
+                                                "requested_tool": function_call.name,
+                                                "available_tools": config.function_tools.iter().map(|t| &t.name).collect::<Vec<_>>()
+                                            })));
                                             serde_json::json!({"error": "Unknown function tool"})
                                         };
+
+                                        // Log function completion
+                                        let func_duration = func_timer.finish(Some(serde_json::json!({
+                                            "success": !response_value.get("error").is_some(),
+                                            "response_size": serde_json::to_string(&response_value).unwrap_or_default().len()
+                                        })));
+
+                                        if let Some(mut sess_logger) = session_logger.as_ref().and_then(|sl| Some((*sl).clone())) {
+                                            sess_logger.log_function_execution(
+                                                &function_call.name, 
+                                                func_duration, 
+                                                !response_value.get("error").is_some(),
+                                                Some(serde_json::json!({
+                                                    "arguments": function_call.arguments,
+                                                    "response_preview": serde_json::to_string(&response_value)
+                                                        .unwrap_or_default()
+                                                        .chars()
+                                                        .take(200)
+                                                        .collect::<String>()
+                                                }))
+                                            );
+                                            session_logger.set(Some(sess_logger));
+                                        }
 
                                         // Add function response message to conversation
                                         let function_response_message = Message {
@@ -680,13 +862,37 @@ pub fn flexible_llm_playground() -> Html {
                                         if response.function_calls.len() == 1 { "call" } else { "calls" }
                                     ));
                                 }
-                                Err(_error) => {
+                                Err(error) => {
+                                    // Log API error
+                                    let _ = api_timer.finish(Some(serde_json::json!({
+                                        "error": error,
+                                        "retry_attempt": retry_attempt,
+                                        "max_retries": max_retries
+                                    })));
+
+                                    if let Some(mut sess_logger) = session_logger.as_ref().and_then(|sl| Some((*sl).clone())) {
+                                        sess_logger.log_api_response(&provider_name, &model_name, 0.0, false, Some(serde_json::json!({
+                                            "error": error,
+                                            "is_retryable": is_retryable_error(&error)
+                                        })));
+                                        session_logger.set(Some(sess_logger));
+                                    }
+
+                                    conv_logger.log_error(&format!("api_call_failed: {}", error), Some(serde_json::json!({
+                                        "api_call_number": total_api_calls,
+                                        "total_function_calls_so_far": total_function_calls,
+                                        "is_retryable": is_retryable_error(&error)
+                                    })));
+
                                     // Error already handled above with notifications
                                     // Don't add error messages to chat history for retryable errors
                                     break;
                                 }
                             }
                         }
+
+                        // Log final response length before moving
+                        let final_response_length = final_response.len();
 
                         // Add final assistant response to session only if it has content
                         if !final_response.trim().is_empty() {
@@ -704,6 +910,29 @@ pub fn flexible_llm_playground() -> Html {
                                 session.updated_at = js_sys::Date::now();
                             }
                         }
+
+                        // Log final conversation completion
+                        let total_duration = flow_timer.finish(Some(serde_json::json!({
+                            "total_api_calls": total_api_calls,
+                            "total_function_calls": total_function_calls,
+                            "final_response_length": final_response_length,
+                            "session_message_count": new_sessions.get(&session_id_clone)
+                                .map(|s| s.messages.len())
+                                .unwrap_or(0)
+                        })));
+
+                        // Log session summary if logger exists
+                        if let Some(sess_logger) = session_logger.as_ref().and_then(|sl| Some((*sl).clone())) {
+                            sess_logger.log_session_summary();
+                        }
+
+                        // Log memory usage after processing
+                        PerformanceMonitor::log_memory_usage();
+
+                        conv_logger.log_performance("total_message_flow_duration", total_duration, "ms", Some(serde_json::json!({
+                            "efficiency_score": if total_api_calls > 0 { total_duration / total_api_calls as f64 } else { 0.0 },
+                            "function_call_ratio": if total_api_calls > 0 { total_function_calls as f64 / total_api_calls as f64 } else { 0.0 }
+                        })));
 
                         is_loading_clone.set(false);
 
