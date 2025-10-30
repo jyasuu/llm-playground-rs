@@ -375,7 +375,14 @@ impl LLMClient for GeminiClient {
             // Process all parts to extract text content and function calls
             for part in &candidate.content.parts {
                 if let Some(text) = &part.text {
-                    content = Some(text.clone());
+                    if content.is_none() {
+                        content = Some(text.clone());
+                    }
+                    else if let Some(existing_content) = &mut content {
+                        if !existing_content.is_empty() {
+                            existing_content.push_str(&text.clone());
+                        }
+                    }
                 }
 
                 if let Some(function_call) = &part.function_call {

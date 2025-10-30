@@ -99,13 +99,28 @@ pub fn use_llm_chat(
                         }
 
                         // Handle function calls automatically with feedback loop
-                        let mut final_response = String::new();
-
+                        log!("🚀 Starting LLM conversation loop for session: {}", &session_id_clone);
+                        let mut loop_iteration = 0;
                         loop {
+                            loop_iteration += 1;
+                            log!("🔄 Loop iteration #{} - Sending {} messages to LLM", loop_iteration, current_messages.len());
                             let mut retry_attempt = 0u32;
                             let max_retries = 3u32;
 
+                            log!("📤 Calling LLM API with {} messages...", current_messages.len());
+                            for (i, msg) in current_messages.iter().enumerate() {
+                                let role_str = match msg.role {
+                                    MessageRole::User => "User",
+                                    MessageRole::Assistant => "Assistant", 
+                                    MessageRole::System => "System",
+                                    MessageRole::Function => "Function",
+                                };
+                                log!("  Message {}: {} - {}", i + 1, role_str, 
+                                    if msg.content.len() > 100 { &msg.content[..100] } else { &msg.content });
+                            }
+                            
                             let api_result = loop {
+                                log!("⏳ Attempting LLM API call (attempt {})...", retry_attempt + 1);
                                 match client.send_message(&current_messages, &config).await {
                                     Ok(response) => break Ok(response),
                                     Err(error) => {
@@ -165,39 +180,43 @@ pub fn use_llm_chat(
 
                             match api_result {
                                 Ok(response) => {
-                                    // Add any text content to final response
+                                    log!("✅ LLM API response received!");
+                                    log!("📊 Response details:");
+                                    log!("  - Function calls: {}", response.function_calls.len());
+                                    log!("  - Content length: {}", response.content.as_ref().map(|c| c.len()).unwrap_or(0));
                                     if let Some(content) = &response.content {
-                                        if !final_response.is_empty() {
-                                            final_response.push_str("\n\n");
-                                        }
-                                        final_response.push_str(content);
+                                        log!("  - Content preview: {:?}", &content[..50.min(content.len())]);
                                     }
-
-                                    // If no function calls, we're done
+                                    
+                                    // If no function calls, this is a regular text response - add it and break
                                     if response.function_calls.is_empty() {
+                                        log!("🏁 No function calls - this is a final text response, ending loop");
+                                        if let Some(content) = &response.content {
+                                            if !content.trim().is_empty() {
+                                                let assistant_message = Message {
+                                                    id: format!("assistant_{}", js_sys::Date::now() as u64),
+                                                    role: MessageRole::Assistant,
+                                                    content: content.clone(),
+                                                    timestamp: js_sys::Date::now(),
+                                                    function_call: None,
+                                                    function_response: None,
+                                                };
+                                                current_messages.push(assistant_message.clone());
+
+                                                // Save assistant message to session immediately for display
+                                                if let Some(session) = new_sessions.get_mut(&session_id_clone) {
+                                                    session.messages.push(assistant_message);
+                                                    session.updated_at = js_sys::Date::now();
+                                                }
+                                                sessions.set(new_sessions.clone());
+                                            }
+                                        }
                                         break;
                                     }
 
-                                    // Process function calls
-                                    if !final_response.is_empty() {
-                                        final_response.push_str("\n\n");
-                                    }
-
-                                    // Add function calls section header
-                                    let num_function_calls = response.function_calls.len();
-                                    final_response.push_str(&format!(
-                                        "## 🔧 Function Execution Sequence ({} {})\n\n",
-                                        num_function_calls,
-                                        if num_function_calls == 1 {
-                                            "call"
-                                        } else {
-                                            "calls"
-                                        }
-                                    ));
-
-                                    // Add additional context for multiple function calls
-                                    if num_function_calls > 1 {
-                                        final_response.push_str("The AI has requested multiple function calls to be executed in sequence. Each step is detailed below:\n\n");
+                                    log!("🔧 LLM requested {} function calls - processing them now...", response.function_calls.len());
+                                    for (i, fc) in response.function_calls.iter().enumerate() {
+                                        log!("  Function {}: {} with id: {}", i + 1, &fc.name, &fc.id);
                                     }
 
                                     // Add assistant message with function calls to conversation
@@ -236,8 +255,16 @@ pub fn use_llm_chat(
                                         sessions.set(new_sessions.clone());
                                     }
 
-                                    // Execute each function call and add responses
-                                    for function_call in &response.function_calls {
+                                    // Execute ALL function calls, then continue loop for LLM response
+                                    log!("🛠️ Starting execution of {} function calls...", response.function_calls.len());
+                                    for (func_index, function_call) in response.function_calls.iter().enumerate() {
+                                        log!("🔧 Executing function {}/{}: {} (ID: {})", 
+                                            func_index + 1, 
+                                            response.function_calls.len(),
+                                            &function_call.name, 
+                                            &function_call.id);
+                                        log!("📋 Function arguments: {}", 
+                                            serde_json::to_string(&function_call.arguments).unwrap_or_else(|_| "invalid_args".to_string()));
                                         // Check if this is a built-in tool and execute it properly
                                         let response_value = if let Some(tool) = config
                                             .function_tools
@@ -264,6 +291,10 @@ pub fn use_llm_chat(
                                             serde_json::json!({"error": "Unknown function tool"})
                                         };
 
+                                        log!("✅ Function {} execution completed", &function_call.name);
+                                        log!("📤 Function result: {}", 
+                                            serde_json::to_string(&response_value).unwrap_or_else(|_| "invalid_result".to_string()));
+
                                         // Add function response message to conversation
                                         let function_response_message = Message {
                                             id: format!("msg_fr_{}", js_sys::Date::now() as u64),
@@ -280,6 +311,7 @@ pub fn use_llm_chat(
                                                 "response": response_value
                                             })),
                                         };
+                                        log!("➕ Adding function response to conversation (message ID: {})", &function_response_message.id);
                                         current_messages.push(function_response_message.clone());
 
                                         // Save function response message to session immediately for display
@@ -287,78 +319,33 @@ pub fn use_llm_chat(
                                             if let Some(session) =
                                                 new_sessions.get_mut(&session_id_clone)
                                             {
-                                                session.messages.push(function_response_message);
+                                                session.messages.push(function_response_message.clone());
                                                 session.updated_at = js_sys::Date::now();
                                             }
                                             sessions.set(new_sessions.clone());
                                         }
 
-                                        // Get the call number for this function
-                                        let call_number = response
-                                            .function_calls
-                                            .iter()
-                                            .position(|fc| fc.id == function_call.id)
-                                            .map(|i| i + 1)
-                                            .unwrap_or(0);
-
-                                        // Add to display (keeping for final response text)
-                                        final_response.push_str(&format!(
-                                            "### Step {}: Calling `{}`\n\n**Function**: `{}()`\n**Purpose**: {}\n\n**📤 Request Parameters**:\n```json\n{}\n```\n\n**📥 Response Received**:\n```json\n{}\n```\n\n**✅ Function call completed**",
-                                            call_number,
-                                            function_call.name,
-                                            function_call.name,
-                                            config
-                                                .function_tools
-                                                .iter()
-                                                .find(|tool| tool.name == function_call.name)
-                                                .map(|tool| tool.description.clone())
-                                                .unwrap_or_else(|| "Execute function".to_string()),
-                                            serde_json::to_string_pretty(&function_call.arguments).unwrap_or_else(|_| "{}".to_string()),
-                                            serde_json::to_string_pretty(&response_value).unwrap_or_else(|_| "Invalid response".to_string())
-                                        ));
-                                        if function_call != response.function_calls.last().unwrap()
-                                        {
-                                            final_response.push_str("\n\n");
-                                        }
+                                        log!("📝 Function response added to conversation. Total messages now: {}", current_messages.len());
                                     }
-
-                                    // Add a summary at the end of all function calls
-                                    final_response.push_str("\n\n---\n\n");
-                                    final_response.push_str(&format!(
-                                        "**🔄 Function Execution Summary**: Completed {} function {}.\n\n",
-                                        response.function_calls.len(),
-                                        if response.function_calls.len() == 1 { "call" } else { "calls" }
-                                    ));
+                                    
+                                    log!("🔄 ALL function calls completed! Now continuing loop to trigger LLM response...");
+                                    log!("📨 Next LLM call will include {} messages (including {} function responses)", 
+                                        current_messages.len(), 
+                                        response.function_calls.len());
+                                    // Continue the loop to send updated messages back to LLM
+                                    // This will trigger another LLM call with the function result
                                 }
                                 Err(_error) => {
                                     // Error already handled above with notifications
                                     // Don't add error messages to chat history for retryable errors
+                                    log!("❌ API error occurred, breaking out of loop");
                                     break;
                                 }
                             }
                         }
 
-                        // Add final assistant response to session only if it has content
-                        if !final_response.trim().is_empty() {
-                            if let Some(session) = new_sessions.get_mut(&session_id_clone) {
-                                let assistant_message = Message {
-                                    id: format!("assistant_{}", js_sys::Date::now() as u64),
-                                    role: MessageRole::Assistant,
-                                    content: final_response,
-                                    timestamp: js_sys::Date::now(),
-                                    function_call: None,
-                                    function_response: None,
-                                };
-
-                                session.messages.push(assistant_message);
-                                session.updated_at = js_sys::Date::now();
-                            }
-                        }
-
+                        log!("🏁 LLM conversation loop completed after {} iterations", loop_iteration);
                         is_loading_clone.set(false);
-
-                        // Set state after mutations
-                        sessions.set(new_sessions.clone());
                     }
                 });
             }
