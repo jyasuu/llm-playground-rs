@@ -1,0 +1,188 @@
+# LLM Client Refactoring Implementation
+
+This document explains the implementation of the refactored LLM client architecture as requested in TODO.md.
+
+## Overview
+
+The refactoring addresses three main issues identified in the TODO:
+
+1. **System Prompt Management**: System prompts are now handled internally by each client instead of being passed by the caller
+2. **Unified Data Structure**: A new unified message format that works with both Gemini and OpenAI APIs
+3. **Function Call ID Management**: Each client now manages function call IDs internally according to their API requirements
+
+## Key Changes
+
+### 1. New Unified Message Structure
+
+```rust
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct UnifiedMessage {
+    pub role: UnifiedRole,
+    pub content: Option<String>,
+    pub function_calls: Vec<UnifiedFunctionCall>,
+    pub function_responses: Vec<UnifiedFunctionResponse>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum UnifiedRole {
+    User,
+    Assistant,
+    Tool,
+}
+```
+
+This unified structure eliminates the complexity of having different message formats for different APIs.
+
+### 2. Updated LLMClient Trait
+
+```rust
+pub trait LLMClient {
+    fn send_message(
+        &self,
+        messages: &[UnifiedMessage],
+        config: &ApiConfig,
+    ) -> Pin<Box<dyn Future<Output = Result<LLMResponse, String>>>>;
+
+    fn set_system_prompt(&mut self, prompt: &str);
+    
+    // Legacy compatibility methods for existing code
+    fn send_message_legacy(&self, messages: &[Message], config: &ApiConfig) -> ...;
+}
+```
+
+### 3. Client-Specific Implementations
+
+#### Gemini Client
+- **System Prompt**: Stored internally and added to `systemInstruction` field
+- **Function Call ID**: Generated using format `"gemini-{function_name}-{timestamp}"`
+- **Message Conversion**: Converts UnifiedMessage to Gemini's Content/Parts structure
+- **Function Responses**: Added as user messages with `functionResponse` parts
+
+#### OpenAI Client  
+- **System Prompt**: Stored internally and added as first message with role "system"
+- **Function Call ID**: Generated using format `"call_{timestamp}_{index}"`
+- **Message Conversion**: Converts UnifiedMessage to OpenAI's message array format
+- **Function Responses**: Added as separate tool messages with proper `tool_call_id` mapping
+
+## Usage Examples
+
+### Basic Message Sending (New Way)
+
+```rust
+use crate::llm_playground::api_clients::{UnifiedMessage, UnifiedRole};
+
+let messages = vec![
+    UnifiedMessage {
+        role: UnifiedRole::User,
+        content: Some("Hello!".to_string()),
+        function_calls: vec![],
+        function_responses: vec![],
+    }
+];
+
+let mut client = GeminiClient::new();
+client.set_system_prompt("You are a helpful assistant.");
+let response = client.send_message(&messages, &config).await?;
+```
+
+### Function Calls
+
+```rust
+use crate::llm_playground::api_clients::{UnifiedFunctionCall, UnifiedFunctionResponse};
+
+// Assistant message with function calls
+let assistant_message = UnifiedMessage {
+    role: UnifiedRole::Assistant,
+    content: None,
+    function_calls: vec![
+        UnifiedFunctionCall {
+            name: "fetch".to_string(),
+            arguments: serde_json::json!({"url": "https://httpbin.org/get"}),
+        }
+    ],
+    function_responses: vec![],
+};
+
+// Tool message with function responses
+let tool_message = UnifiedMessage {
+    role: UnifiedRole::Tool,
+    content: None,
+    function_calls: vec![],
+    function_responses: vec![
+        UnifiedFunctionResponse {
+            name: "fetch".to_string(),
+            content: serde_json::json!({"status": 200, "data": "..."}),
+        }
+    ],
+};
+```
+
+### Legacy Compatibility
+
+Existing code continues to work using the legacy methods:
+
+```rust
+// Old code still works
+let old_messages: Vec<Message> = get_existing_messages();
+let response = client.send_message_legacy(&old_messages, &config).await?;
+```
+
+## Migration Path
+
+### Phase 1: ✅ Complete
+- [x] Create unified message structures
+- [x] Update LLMClient trait with new interface
+- [x] Refactor Gemini client implementation
+- [x] Refactor OpenAI client implementation
+- [x] Add legacy compatibility layer
+- [x] Update tests
+
+### Phase 2: Future Work
+- [ ] Update UI components to use new UnifiedMessage format
+- [ ] Remove legacy compatibility methods
+- [ ] Update all callers to use new interface
+- [ ] Add integration tests for both clients
+
+## Benefits
+
+1. **Simplified API**: Single message format works with all LLM providers
+2. **Better Encapsulation**: System prompts and function call IDs are handled internally
+3. **Easier Testing**: Unified interface makes it easier to test different providers
+4. **Future-Proof**: Easy to add new LLM providers with same interface
+5. **Backward Compatible**: Existing code continues to work during transition
+
+## Technical Details
+
+### Function Call ID Management
+
+**Gemini**: 
+- IDs are generated by the client since Gemini doesn't require specific IDs
+- Format: `gemini-{function_name}-{timestamp}`
+
+**OpenAI**:
+- IDs are generated to match OpenAI's expected format
+- Format: `call_{timestamp}_{index}`
+- Tool responses reference these IDs via `tool_call_id`
+
+### System Prompt Handling
+
+**Gemini**:
+```rust
+system_instruction: Some(SystemInstruction {
+    parts: vec![Part {
+        text: Some(system_prompt.clone()),
+        // ...
+    }],
+})
+```
+
+**OpenAI**:
+```rust
+OpenAIMessage {
+    role: "system".to_string(),
+    content: Some(system_prompt.clone()),
+    // ...
+}
+```
+
+This refactoring successfully implements the requirements from TODO.md and provides a clean, unified interface for LLM communication.

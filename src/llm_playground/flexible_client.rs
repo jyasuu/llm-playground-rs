@@ -105,7 +105,7 @@ impl FlexibleLLMClient {
         if let Some(provider) = config.get_provider(&provider_name) {
             let client = self.get_client_for_provider(provider);
             let legacy_config = self.create_legacy_config(provider, config, &model_name);
-            client.send_message(messages, &legacy_config)
+            client.send_message_legacy(messages, &legacy_config)
         } else {
             Box::pin(async move { Err(format!("Provider '{}' not found", provider_name)) })
         }
@@ -122,7 +122,7 @@ impl FlexibleLLMClient {
         if let Some(provider) = config.get_provider(&provider_name) {
             let client = self.get_client_for_provider(provider);
             let legacy_config = self.create_legacy_config(provider, config, &model_name);
-            client.send_message_stream(messages, &legacy_config, callback)
+            client.send_message_stream_legacy(messages, &legacy_config, callback)
         } else {
             Box::pin(async move { Err(format!("Provider '{}' not found", provider_name)) })
         }
@@ -208,7 +208,7 @@ impl FlexibleLLMClient {
         }];
 
         Box::pin(async move {
-            match client.send_message(&test_messages, &legacy_config).await {
+            match client.send_message_legacy(&test_messages, &legacy_config).await {
                 Ok(_) => Ok("Connection successful".to_string()),
                 Err(e) => Err(format!("Connection failed: {}", e)),
             }

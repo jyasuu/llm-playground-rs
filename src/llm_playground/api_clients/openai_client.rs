@@ -1,9 +1,9 @@
 // OpenAI-compatible API client for WASM
 use crate::llm_playground::api_clients::{
     ConversationManager, ConversationMessage, FunctionCallRequest, FunctionResponse, LLMClient,
-    LLMResponse, StreamCallback,
+    LLMResponse, StreamCallback, UnifiedMessage, UnifiedRole, UnifiedFunctionCall, UnifiedFunctionResponse,
 };
-use crate::llm_playground::{ApiConfig, Message, MessageRole};
+use crate::llm_playground::ApiConfig;
 use gloo_console::log;
 use gloo_net::http::Request;
 use js_sys::Promise;
@@ -84,7 +84,7 @@ impl OpenAIClient {
         let _ = JsFuture::from(promise).await;
     }
 
-    fn convert_messages_to_openai(&self, messages: &[Message]) -> Vec<OpenAIMessage> {
+    fn convert_messages_to_openai(&self, messages: &[UnifiedMessage]) -> Vec<OpenAIMessage> {
         let mut openai_messages = Vec::new();
 
         // Add system message if available
@@ -185,89 +185,86 @@ impl OpenAIClient {
 
         // Add new messages
         for message in messages {
-            log!("message_json");
+            log!("unified_message_json");
             let message_json = serde_json::json!(message.clone());
             log!(message_json.to_string());
 
-            let role = match message.role {
-                MessageRole::System => {
-                    if openai_messages.is_empty() || openai_messages[0].role != "system" {
-                        "system"
-                    } else {
-                        continue; // Skip if we already have a system message
-                    }
+            match message.role {
+                UnifiedRole::User => {
+                    let mut openai_msg = OpenAIMessage {
+                        role: "user".to_string(),
+                        content: message.content.clone(),
+                        name: None,
+                        tool_calls: None,
+                        tool_call_id: None,
+                    };
+
+                    openai_messages.push(openai_msg);
                 }
-                MessageRole::User => "user",
-                MessageRole::Assistant => "assistant",
-                MessageRole::Function => "tool",
-            };
+                UnifiedRole::Assistant => {
+                    let mut openai_msg = OpenAIMessage {
+                        role: "assistant".to_string(),
+                        content: if message.function_calls.is_empty() {
+                            message.content.clone()
+                        } else {
+                            None // Content must be null when tool_calls is present
+                        },
+                        name: None,
+                        tool_calls: None,
+                        tool_call_id: None,
+                    };
 
-            let mut openai_msg = OpenAIMessage {
-                role: role.to_string(),
-                content: if message.content.is_empty() {
-                    None
-                } else {
-                    Some(message.content.clone())
-                },
-                name: None,
-                tool_calls: None,
-                tool_call_id: None,
-            };
-
-            // Handle function response messages
-            if message.role == MessageRole::Function {
-                if let Some(func_response) = &message.function_response {
-                    if let Some(call_id) = func_response.get("id").and_then(|v| v.as_str()) {
-                        openai_msg.tool_call_id = Some(call_id.to_string());
-                    }
-                    // IMPORTANT: Set the function name for tool messages - required by Gemini's OpenAI API
-                    if let Some(func_name) = func_response.get("name").and_then(|v| v.as_str()) {
-                        openai_msg.name = Some(func_name.to_string());
-                    }
-                    // Set content to the function response data
-                    if let Some(response_data) = func_response.get("response") {
-                        openai_msg.content =
-                            Some(serde_json::to_string(response_data).unwrap_or_default());
-                    }
-                }
-            }
-
-            // Handle function calls from assistant messages
-            if message.role == MessageRole::Assistant {
-                if let Some(fc) = &message.function_call {
-                    // Convert function call JSON to proper tool_calls format
-                    if let Ok(func_calls) =
-                        serde_json::from_value::<Vec<serde_json::Value>>(fc.clone())
-                    {
+                    // Handle function calls
+                    if !message.function_calls.is_empty() {
                         let mut tool_calls = Vec::new();
-                        for func_call in func_calls {
-                            if let (Some(id), Some(name), Some(args)) = (
-                                func_call.get("id").and_then(|v| v.as_str()),
-                                func_call.get("name").and_then(|v| v.as_str()),
-                                func_call.get("arguments"),
-                            ) {
-                                tool_calls.push(ToolCall {
-                                    id: id.to_string(),
-                                    call_type: "function".to_string(),
-                                    function: FunctionCall {
-                                        name: name.to_string(),
-                                        arguments: serde_json::to_string(args).unwrap_or_default(),
-                                    },
-                                });
+                        for (index, func_call) in message.function_calls.iter().enumerate() {
+                            // Generate OpenAI-style call ID
+                            let call_id = format!("call_{}", (js_sys::Date::now() as u64) + index as u64);
+                            
+                            tool_calls.push(ToolCall {
+                                id: call_id,
+                                call_type: "function".to_string(),
+                                function: FunctionCall {
+                                    name: func_call.name.clone(),
+                                    arguments: serde_json::to_string(&func_call.arguments).unwrap_or_default(),
+                                },
+                            });
+                        }
+                        openai_msg.tool_calls = Some(tool_calls);
+                    }
+
+                    openai_messages.push(openai_msg);
+                }
+                UnifiedRole::Tool => {
+                    // Handle function responses - need to create separate messages for each response
+                    for func_response in &message.function_responses {
+                        // Find the corresponding tool call ID from the previous assistant message
+                        let call_id = if let Some(last_assistant) = openai_messages.iter().rev()
+                            .find(|msg| msg.role == "assistant" && msg.tool_calls.is_some()) {
+                            if let Some(tool_calls) = &last_assistant.tool_calls {
+                                tool_calls.iter()
+                                    .find(|tc| tc.function.name == func_response.name)
+                                    .map(|tc| tc.id.clone())
+                                    .unwrap_or_else(|| format!("call_{}", js_sys::Date::now() as u64))
+                            } else {
+                                format!("call_{}", js_sys::Date::now() as u64)
                             }
-                        }
-                        if !tool_calls.is_empty() {
-                            openai_msg.tool_calls = Some(tool_calls);
-                        }
+                        } else {
+                            format!("call_{}", js_sys::Date::now() as u64)
+                        };
+
+                        let openai_msg = OpenAIMessage {
+                            role: "tool".to_string(),
+                            content: Some(serde_json::to_string(&func_response.content).unwrap_or_default()),
+                            name: Some(func_response.name.clone()),
+                            tool_calls: None,
+                            tool_call_id: Some(call_id),
+                        };
+
+                        openai_messages.push(openai_msg);
                     }
                 }
             }
-
-            log!("openai_msg_json");
-            let openai_msg_json = serde_json::json!(openai_msg.clone());
-            log!(openai_msg_json.to_string());
-
-            openai_messages.push(openai_msg);
         }
 
         openai_messages
@@ -298,7 +295,7 @@ impl OpenAIClient {
 
     async fn send_message_internal(
         &self,
-        messages: &[Message],
+        messages: &[UnifiedMessage],
         config: &ApiConfig,
     ) -> Result<String, String> {
         log!("OpenAI API call started");
@@ -387,7 +384,7 @@ impl OpenAIClient {
 impl LLMClient for OpenAIClient {
     fn send_message(
         &self,
-        messages: &[Message],
+        messages: &[UnifiedMessage],
         config: &ApiConfig,
     ) -> Pin<Box<dyn Future<Output = Result<LLMResponse, String>>>> {
         let self_clone = self.clone();
@@ -529,7 +526,7 @@ impl LLMClient for OpenAIClient {
 
     fn send_message_stream(
         &self,
-        messages: &[Message],
+        messages: &[UnifiedMessage],
         config: &ApiConfig,
         callback: StreamCallback,
     ) -> Pin<Box<dyn Future<Output = Result<(), String>>>> {
@@ -662,6 +659,10 @@ impl LLMClient for OpenAIClient {
 
             Ok(model_names)
         })
+    }
+
+    fn set_system_prompt(&mut self, prompt: &str) {
+        self.system_prompt = Some(prompt.to_string());
     }
 }
 

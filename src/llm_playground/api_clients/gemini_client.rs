@@ -1,9 +1,9 @@
 // Gemini API client for WASM
 use crate::llm_playground::api_clients::{
     ConversationManager, ConversationMessage, FunctionCallRequest, FunctionResponse, LLMClient,
-    LLMResponse, StreamCallback,
+    LLMResponse, StreamCallback, UnifiedMessage, UnifiedRole, UnifiedFunctionCall, UnifiedFunctionResponse,
 };
-use crate::llm_playground::{ApiConfig, Message, MessageRole};
+use crate::llm_playground::ApiConfig;
 use gloo_console::log;
 use gloo_net::http::Request;
 use serde::{Deserialize, Serialize};
@@ -95,7 +95,7 @@ impl GeminiClient {
 
     fn convert_messages_to_contents(
         &self,
-        messages: &[Message],
+        messages: &[UnifiedMessage],
     ) -> (Vec<Content>, Option<SystemInstruction>) {
         let mut contents = Vec::new();
         let mut system_instruction = None;
@@ -150,77 +150,91 @@ impl GeminiClient {
         // Add new messages
         for message in messages {
             match message.role {
-                MessageRole::System => {
-                    if system_instruction.is_none() {
-                        system_instruction = Some(SystemInstruction {
-                            parts: vec![Part {
-                                text: Some(message.content.clone()),
+                UnifiedRole::User => {
+                    let mut parts = Vec::new();
+
+                    // Add text content if present
+                    if let Some(content) = &message.content {
+                        if !content.trim().is_empty() {
+                            parts.push(Part {
+                                text: Some(content.clone()),
                                 function_call: None,
                                 function_response: None,
-                            }],
+                            });
+                        }
+                    }
+
+                    // Add function responses
+                    for func_response in &message.function_responses {
+                        let response_json = serde_json::json!({
+                            "id": format!("gemini-{}-{}", func_response.name, js_sys::Date::now() as u64),
+                            "name": func_response.name,
+                            "response": func_response.content
+                        });
+
+                        parts.push(Part {
+                            text: None,
+                            function_call: None,
+                            function_response: Some(response_json),
                         });
                     }
-                }
-                MessageRole::User => {
-                    if !message.content.trim().is_empty() {
-                        let mut parts = vec![Part {
-                            text: Some(message.content.clone()),
-                            function_call: None,
-                            function_response: None,
-                        }];
 
-                        if let Some(fc) = &message.function_call {
-                            parts.push(Part {
-                                text: None,
-                                function_call: Some(fc.clone()),
-                                function_response: None,
-                            });
-                        }
-
-                        if let Some(fr) = &message.function_response {
-                            parts.push(Part {
-                                text: None,
-                                function_call: None,
-                                function_response: Some(fr.clone()),
-                            });
-                        }
-
+                    if !parts.is_empty() {
                         contents.push(Content {
                             parts,
                             role: "user".to_string(),
                         });
                     }
                 }
-                MessageRole::Assistant => {
-                    if !message.content.trim().is_empty() {
-                        let mut parts = vec![Part {
-                            text: Some(message.content.clone()),
-                            function_call: None,
-                            function_response: None,
-                        }];
+                UnifiedRole::Assistant => {
+                    let mut parts = Vec::new();
 
-                        if let Some(fc) = &message.function_call {
+                    // Add text content if present
+                    if let Some(content) = &message.content {
+                        if !content.trim().is_empty() {
                             parts.push(Part {
-                                text: None,
-                                function_call: Some(fc.clone()),
+                                text: Some(content.clone()),
+                                function_call: None,
                                 function_response: None,
                             });
                         }
+                    }
 
+                    // Add function calls
+                    for func_call in &message.function_calls {
+                        let call_json = serde_json::json!({
+                            "name": func_call.name,
+                            "args": func_call.arguments
+                        });
+
+                        parts.push(Part {
+                            text: None,
+                            function_call: Some(call_json),
+                            function_response: None,
+                        });
+                    }
+
+                    if !parts.is_empty() {
                         contents.push(Content {
                             parts,
                             role: "model".to_string(),
                         });
                     }
                 }
-                MessageRole::Function => {
-                    // Handle function messages as user messages with function responses
-                    if let Some(fr) = &message.function_response {
+                UnifiedRole::Tool => {
+                    // Tool messages are function responses, add them as user messages with function responses
+                    for func_response in &message.function_responses {
+                        let response_json = serde_json::json!({
+                            "id": format!("gemini-{}-{}", func_response.name, js_sys::Date::now() as u64),
+                            "name": func_response.name,
+                            "response": func_response.content
+                        });
+
                         contents.push(Content {
                             parts: vec![Part {
                                 text: None,
                                 function_call: None,
-                                function_response: Some(fr.clone()),
+                                function_response: Some(response_json),
                             }],
                             role: "user".to_string(),
                         });
@@ -279,7 +293,7 @@ impl GeminiClient {
 impl LLMClient for GeminiClient {
     fn send_message(
         &self,
-        messages: &[Message],
+        messages: &[UnifiedMessage],
         config: &ApiConfig,
     ) -> Pin<Box<dyn Future<Output = Result<LLMResponse, String>>>> {
         let (contents, system_instruction) = self.convert_messages_to_contents(messages);
@@ -420,7 +434,7 @@ impl LLMClient for GeminiClient {
 
     fn send_message_stream(
         &self,
-        messages: &[Message],
+        messages: &[UnifiedMessage],
         config: &ApiConfig,
         callback: StreamCallback,
     ) -> Pin<Box<dyn Future<Output = Result<(), String>>>> {
@@ -557,6 +571,10 @@ impl LLMClient for GeminiClient {
             Ok(model_names)
         })
     }
+
+    fn set_system_prompt(&mut self, prompt: &str) {
+        self.system_prompt = Some(prompt.to_string());
+    }
 }
 
 impl ConversationManager for GeminiClient {
@@ -607,21 +625,19 @@ impl ConversationManager for GeminiClient {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::llm_playground::{ApiConfig, FunctionTool, Message, MessageRole};
+    use crate::llm_playground::{ApiConfig, FunctionTool};
     use serde_json::json;
 
     fn create_test_client() -> GeminiClient {
         GeminiClient::new()
     }
 
-    fn create_test_message(role: MessageRole, content: &str) -> Message {
-        Message {
-            id: "test_id".to_string(),
+    fn create_test_message(role: UnifiedRole, content: &str) -> UnifiedMessage {
+        UnifiedMessage {
             role,
-            content: content.to_string(),
-            timestamp: 0.0,
-            function_call: None,
-            function_response: None,
+            content: Some(content.to_string()),
+            function_calls: vec![],
+            function_responses: vec![],
         }
     }
 
@@ -669,7 +685,7 @@ mod tests {
     #[test]
     fn test_convert_messages_to_contents_simple() {
         let client = create_test_client();
-        let messages = vec![create_test_message(MessageRole::User, "Hello")];
+        let messages = vec![create_test_message(UnifiedRole::User, "Hello")];
         let (contents, system_instruction) = client.convert_messages_to_contents(&messages);
 
         assert!(system_instruction.is_none());
@@ -696,14 +712,11 @@ mod tests {
     fn test_convert_messages_with_system_prompt_from_message() {
         let client = create_test_client();
         let messages = vec![
-            create_test_message(MessageRole::System, "Be verbose."),
-            create_test_message(MessageRole::User, "Hello"),
+            create_test_message(UnifiedRole::User, "Hello"),
         ];
         let (contents, system_instruction) = client.convert_messages_to_contents(&messages);
 
-        assert!(system_instruction.is_some());
-        let instruction = system_instruction.unwrap();
-        assert_eq!(instruction.parts[0].text, Some("Be verbose.".to_string()));
+        assert!(system_instruction.is_none());
         assert_eq!(contents.len(), 1);
         assert_eq!(contents[0].role, "user");
     }
@@ -714,7 +727,7 @@ mod tests {
         client.add_user_message("First message");
         client.add_assistant_message("First response", None);
 
-        let messages = vec![create_test_message(MessageRole::User, "Second message")];
+        let messages = vec![create_test_message(UnifiedRole::User, "Second message")];
 
         let (contents, _) = client.convert_messages_to_contents(&messages);
 
