@@ -1,7 +1,7 @@
 // OpenAI-compatible API client for WASM
 use crate::llm_playground::api_clients::{
     ConversationManager, ConversationMessage, FunctionCallRequest, FunctionResponse, LLMClient,
-    LLMResponse, StreamCallback, UnifiedMessage, UnifiedRole, UnifiedFunctionCall, UnifiedFunctionResponse,
+    LLMResponse, StreamCallback, UnifiedMessage, UnifiedRole,
 };
 use crate::llm_playground::ApiConfig;
 use gloo_console::log;
@@ -84,14 +84,24 @@ impl OpenAIClient {
         let _ = JsFuture::from(promise).await;
     }
 
-    fn convert_messages_to_openai(&self, messages: &[UnifiedMessage]) -> Vec<OpenAIMessage> {
+    fn convert_messages_to_openai(&self, messages: &[UnifiedMessage], config: &ApiConfig) -> Vec<OpenAIMessage> {
         let mut openai_messages = Vec::new();
 
-        // Add system message if available
-        if let Some(system_prompt) = &self.system_prompt {
+        // Add system message - prioritize instance system prompt, then config system prompt
+        let system_prompt = self.system_prompt.as_ref()
+            .filter(|p| !p.is_empty())
+            .or_else(|| {
+                if !config.system_prompt.is_empty() {
+                    Some(&config.system_prompt)
+                } else {
+                    None
+                }
+            });
+            
+        if let Some(prompt) = system_prompt {
             openai_messages.push(OpenAIMessage {
                 role: "system".to_string(),
-                content: Some(system_prompt.clone()),
+                content: Some(prompt.clone()),
                 name: None,
                 tool_calls: None,
                 tool_call_id: None,
@@ -304,7 +314,7 @@ impl OpenAIClient {
             return Err("Please configure your OpenAI API key in Settings".to_string());
         }
 
-        let openai_messages = self.convert_messages_to_openai(messages);
+        let openai_messages = self.convert_messages_to_openai(messages, config);
         let tools = self.build_tools(config);
 
         let mut request_body = serde_json::json!({
@@ -401,7 +411,7 @@ impl LLMClient for OpenAIClient {
                 return Err("Please configure your OpenAI API key in Settings".to_string());
             }
 
-            let openai_messages = self_clone.convert_messages_to_openai(&messages_clone);
+            let openai_messages = self_clone.convert_messages_to_openai(&messages_clone, &config_clone);
 
             log!("openai_messages_json");
             let openai_messages_json = serde_json::json!(openai_messages.clone());
@@ -530,7 +540,7 @@ impl LLMClient for OpenAIClient {
         config: &ApiConfig,
         callback: StreamCallback,
     ) -> Pin<Box<dyn Future<Output = Result<(), String>>>> {
-        let openai_messages = self.convert_messages_to_openai(messages);
+        let openai_messages = self.convert_messages_to_openai(messages, config);
         let tools = self.build_tools(config);
         let api_key = config.openai.api_key.clone();
         let base_url = config.openai.base_url.clone();

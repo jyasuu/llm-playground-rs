@@ -1,7 +1,7 @@
 // Gemini API client for WASM
 use crate::llm_playground::api_clients::{
     ConversationManager, ConversationMessage, FunctionCallRequest, FunctionResponse, LLMClient,
-    LLMResponse, StreamCallback, UnifiedMessage, UnifiedRole, UnifiedFunctionCall, UnifiedFunctionResponse,
+    LLMResponse, StreamCallback, UnifiedMessage, UnifiedRole,
 };
 use crate::llm_playground::ApiConfig;
 use gloo_console::log;
@@ -296,7 +296,31 @@ impl LLMClient for GeminiClient {
         messages: &[UnifiedMessage],
         config: &ApiConfig,
     ) -> Pin<Box<dyn Future<Output = Result<LLMResponse, String>>>> {
-        let (contents, system_instruction) = self.convert_messages_to_contents(messages);
+        let (contents, mut system_instruction) = self.convert_messages_to_contents(messages);
+        
+        // Use system prompt from instance or config (prioritize instance system prompt)
+        if system_instruction.is_none() {
+            let system_prompt = self.system_prompt.as_ref()
+                .filter(|p| !p.is_empty())
+                .or_else(|| {
+                    if !config.system_prompt.is_empty() {
+                        Some(&config.system_prompt)
+                    } else {
+                        None
+                    }
+                });
+                
+            if let Some(prompt) = system_prompt {
+                system_instruction = Some(SystemInstruction {
+                    parts: vec![Part {
+                        text: Some(prompt.clone()),
+                        function_call: None,
+                        function_response: None,
+                    }],
+                });
+            }
+        }
+        
         let tools = self.build_tools(config);
         let api_key = config.gemini.api_key.clone();
         let model = config.gemini.model.clone();

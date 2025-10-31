@@ -9,7 +9,7 @@ use yew::prelude::*;
 
 use crate::llm_playground::{
     components::notification::{use_notifications, NotificationContainer},
-    flexible_client::FlexibleLLMClient,
+    unified_client::UnifiedLLMClient,
     mcp_client::McpClient,
     use_llm_chat,
     ChatHeader, ChatRoom, ChatSession, FlexibleApiConfig, FlexibleSettingsPanel, InputBar,
@@ -31,7 +31,7 @@ pub fn flexible_llm_playground() -> Html {
     let show_model_selector = use_state(|| false);
     let dark_mode = use_state(|| false);
     let current_message = use_state(|| String::new());
-    let llm_client = use_state(|| FlexibleLLMClient::new());
+    let llm_client = use_state(|| UnifiedLLMClient::new());
     let mcp_client = use_state(|| Option::<McpClient>::None);
 
     // Notification system

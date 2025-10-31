@@ -212,3 +212,10 @@
   1. for system prompt: put system prompt in @src\llm_playground\api_clients\gemini_client.rs and @src\llm_playground\api_clients\openai_client.rs instead caller
   2. design a data structure for caller and llm client, and llm client is responsible to data model convention between this generic data model and there own data model. special for function call is use one generic model record to generate multiple message
   3. for function call id: maybe make it just proccess in llm client. for example openai just follow the tool order to mapping there function call id in @src\llm_playground\api_clients\openai_client.rs . for gemini is just simple to generate there id in @src\llm_playground\api_clients\gemini_client.rs
+4. maybe this generic data model responsible to consider ui display and data store to browser local storage
+
+
+## reference @README.md
+## reference @src\llm_playground\hooks\use_llm_chat.rs
+## reference @src\llm_playground\flexible_client.rs
+## reference @src\llm_playground\flexible_playground.rs
