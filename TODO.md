@@ -216,7 +216,7 @@
 4. maybe this generic data model responsible to consider ui display and data store to browser local storage
 
 
-## reference @README.md
-## reference @src\llm_playground\hooks\use_llm_chat.rs
-## reference @src\llm_playground\flexible_client.rs
-## reference @src\llm_playground\flexible_playground.rs
+## check @README.md
+## check @src\llm_playground\hooks\use_llm_chat.rs
+## check @src\llm_playground\flexible_client.rs
+## check @src\llm_playground\flexible_playground.rs
