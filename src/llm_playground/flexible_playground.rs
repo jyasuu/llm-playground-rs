@@ -8,18 +8,168 @@ use wasm_bindgen::JsCast;
 use yew::prelude::*;
 
 use crate::llm_playground::{
-    components::notification::{use_notifications, NotificationContainer},
+    api_clients::LLMResponse,
+    components::notification::{use_notifications, NotificationContainer, NotificationMessage},
     flexible_client::FlexibleLLMClient,
     mcp_client::McpClient,
     use_llm_chat,
     ChatHeader, ChatRoom, ChatSession, FlexibleApiConfig, FlexibleSettingsPanel, InputBar,
-    ModelSelector, Sidebar,
+    ModelSelector, Sidebar, Message, MessageRole,
 };
 
 const STORAGE_KEY_FLEXIBLE_CONFIG: &str = "llm_playground_flexible_config";
 const STORAGE_KEY_SESSIONS: &str = "llm_playground_sessions";
 const STORAGE_KEY_CURRENT_SESSION: &str = "llm_playground_current_session";
 const STORAGE_KEY_DARK_MODE: &str = "llm_playground_dark_mode";
+
+// Function to handle LLM responses and manage function calls
+fn handle_llm_response(
+    response: LLMResponse,
+    sessions: UseStateHandle<HashMap<String, ChatSession>>,
+    current_session_id: UseStateHandle<Option<String>>,
+    api_config: UseStateHandle<FlexibleApiConfig>,
+    mcp_client: UseStateHandle<Option<McpClient>>,
+    send_to_llm: UseStateHandle<Option<Callback<(Vec<crate::llm_playground::Message>, FlexibleApiConfig)>>>,
+    add_notification: Callback<NotificationMessage>,
+) {
+    use crate::llm_playground::{Message, MessageRole};
+    log!(format!("📝 Handling LLM response: {:?}", &response));
+    
+    if let Some(session_id) = current_session_id.as_ref() {
+        log!(format!("🔍 Current session ID for response handling: {}", &session_id));
+        let mut new_sessions = (*sessions).clone();
+        if let Some(session) = new_sessions.get_mut(session_id) {
+            log!(format!("🗨️ Found session {} for updating with LLM response", &session_id));
+            // Add assistant message
+            if response.function_calls.is_empty() {
+                log!(format!("🗨️ LLM response is a regular text response"));
+                // Regular text response
+                if let Some(content) = &response.content {
+                    if !content.trim().is_empty() {
+                        let assistant_message = Message {
+                            id: format!("assistant_{}", js_sys::Date::now() as u64),
+                            role: MessageRole::Assistant,
+                            content: content.clone(),
+                            timestamp: js_sys::Date::now(),
+                            function_call: None,
+                            function_response: None,
+                        };
+                        session.messages.push(assistant_message);
+                        session.updated_at = js_sys::Date::now();
+                    }
+                }
+            } else {
+                log!(format!("🗨️ LLM response includes {} function calls", response.function_calls.len()));
+                // Function call response
+                let assistant_message = Message {
+                    id: format!("msg_fc_{}", js_sys::Date::now() as u64),
+                    role: MessageRole::Assistant,
+                    content: response.content.unwrap_or_default(),
+                    timestamp: js_sys::Date::now(),
+                    function_call: Some(serde_json::json!(response
+                        .function_calls
+                        .iter()
+                        .map(|fc| {
+                            serde_json::json!({
+                                "id": fc.id,
+                                "name": fc.name,
+                                "arguments": fc.arguments
+                            })
+                        })
+                        .collect::<Vec<_>>())),
+                    function_response: None,
+                };
+                session.messages.push(assistant_message);
+                session.updated_at = js_sys::Date::now();
+                
+                // Execute function calls and add responses
+                let session_messages = session.messages.clone();
+                let config = (*api_config).clone();
+                let mcp_client_clone = (*mcp_client).clone();
+                let sessions_clone = sessions.clone();
+                let current_session_id_clone = current_session_id.clone();
+                let send_to_llm_clone = send_to_llm.clone();
+                let session_id_str = session_id.clone();
+                
+                wasm_bindgen_futures::spawn_local(async move {
+                    let mut updated_messages = session_messages;
+                    
+                    for function_call in &response.function_calls {
+                        log!("🔧 Executing function: {} (ID: {})", &function_call.name, &function_call.id);
+                        
+                        // Execute function call
+                        let response_value = if let Some(tool) = config
+                            .function_tools
+                            .iter()
+                            .find(|tool| tool.name == function_call.name)
+                        {
+                            if tool.is_builtin {
+                                // Execute built-in tool
+                                match crate::llm_playground::builtin_tools::execute_builtin_tool(
+                                    &function_call.name, 
+                                    &function_call.arguments, 
+                                    mcp_client_clone.as_ref()
+                                ).await {
+                                    Ok(result) => result,
+                                    Err(error) => serde_json::json!({"error": error}),
+                                }
+                            } else {
+                                // Use mock response
+                                serde_json::from_str(&tool.mock_response)
+                                    .unwrap_or_else(|_| serde_json::json!({"result": tool.mock_response.clone()}))
+                            }
+                        } else {
+                            serde_json::json!({"error": "Unknown function tool"})
+                        };
+
+                        // Add function response message
+                        let function_response_message = Message {
+                            id: format!("msg_fr_{}", js_sys::Date::now() as u64),
+                            role: MessageRole::Function,
+                            content: format!("Function {} executed", function_call.name),
+                            timestamp: js_sys::Date::now(),
+                            function_call: None,
+                            function_response: Some(serde_json::json!({
+                                "id": function_call.id,
+                                "name": function_call.name,
+                                "response": response_value
+                            })),
+                        };
+                        updated_messages.push(function_response_message);
+                    }
+                    
+                    // Update session with function responses
+                    let mut new_sessions = (*sessions_clone).clone();
+                    if let Some(session) = new_sessions.get_mut(&session_id_str) {
+                        session.messages = updated_messages.clone();
+                        session.updated_at = js_sys::Date::now();
+                        sessions_clone.set(new_sessions);
+                    }
+                    
+                    // Send updated messages back to LLM for next response
+                    if let Some(callback) = send_to_llm_clone.as_ref() {
+                        log!(format!("🔄 Sending updated messages back to LLM after function calls"));
+                        callback.emit((updated_messages, config.clone()));
+                    }
+                    else {
+                        log!("⚠️ No send_to_llm callback available to continue conversation after function calls");
+                    }
+                });
+            }
+            for session in new_sessions.iter()
+            {
+                log!(format!("🗨️ Session {} now has {} messages", session.0, session.1.messages.len()));
+            }
+            sessions.set(new_sessions);
+        }
+        else{
+            log!(format!("⚠️ No session found with ID: {}", &session_id));
+        }
+    }
+    else {
+        log!(format!("⚠️ No current session ID available to handle LLM response"));
+    }
+}
 
 #[function_component(FlexibleLLMPlayground)]
 pub fn flexible_llm_playground() -> Html {
@@ -37,15 +187,49 @@ pub fn flexible_llm_playground() -> Html {
     // Notification system
     let (notifications, add_notification, dismiss_notification) = use_notifications();
 
-    // LLM Chat hook
-    let (send_message, is_loading) = use_llm_chat(
-        sessions.clone(),
-        current_session_id.clone(),
+    // Create a shared send_to_llm callback using use_state
+    let send_to_llm: UseStateHandle<Option<Callback<(Vec<Message>, FlexibleApiConfig)>>> = use_state(|| None);
+
+    // LLM Chat hook - now only handles sending to LLM
+    let (send_to_llm_hook, is_loading) = use_llm_chat(
         api_config.clone(),
         llm_client.clone(),
         mcp_client.clone(),
         add_notification.clone(),
+        {
+            let sessions = sessions.clone();
+            let current_session_id = current_session_id.clone();
+            let api_config = api_config.clone();
+            let mcp_client = mcp_client.clone();
+            let add_notification = add_notification.clone();
+            let send_to_llm = send_to_llm.clone();
+            Callback::from(move |response: LLMResponse| {
+                log!(format!("📝 LLM response received in playground hook: {:?}", &response));
+                // Handle LLM response in playground
+                handle_llm_response(
+                    response,
+                    sessions.clone(),
+                    current_session_id.clone(),
+                    api_config.clone(),
+                    mcp_client.clone(),
+                    send_to_llm.clone(),
+                    add_notification.clone(),
+                );
+            })
+        },
     );
+
+    // Set the send_to_llm callback and recreate when api_config or current_session_id changes
+    {
+        let send_to_llm = send_to_llm.clone();
+        let send_to_llm_hook = send_to_llm_hook.clone();
+        let api_config_clone = api_config.clone();
+        let current_session_id_clone = current_session_id.clone();
+        use_effect_with((api_config_clone, current_session_id_clone), move |_| {
+            send_to_llm.set(Some(send_to_llm_hook.clone()));
+            || ()
+        });
+    }
 
     // Auto-initialize MCP connections when MCP config changes
     // Use a separate state to track MCP config changes to avoid infinite loops
@@ -124,6 +308,10 @@ pub fn flexible_llm_playground() -> Html {
                     let mut new_config = (*api_config).clone();
                     new_config.add_mcp_tools(mcp_tools);
                     api_config.set(new_config);
+                                
+                    let (provider_name, model_name) = api_config.get_current_provider_and_model();
+                    log!("🔍 playground::use_effect_with mcp_client - Provider: {}, Model: {}", &provider_name, &model_name);
+                    
                     log!("Added MCP tools to function tools list");
 
                     // Reset the flag after a brief delay to allow config update to complete
@@ -148,10 +336,21 @@ pub fn flexible_llm_playground() -> Html {
         let dark_mode = dark_mode.clone();
 
         use_effect_with((), move |_| {
-            // Load API config
+            // Load API config only if not already set (to avoid overriding session-specific settings)
             if let Ok(config_str) = LocalStorage::get::<String>(STORAGE_KEY_FLEXIBLE_CONFIG) {
-                if let Ok(config) = serde_json::from_str::<FlexibleApiConfig>(&config_str) {
-                    api_config.set(config);
+                if let Ok(loaded_config) = serde_json::from_str::<FlexibleApiConfig>(&config_str) {
+                    // Only load if current config is still default (hasn't been modified)
+                    let current_config = (*api_config).clone();
+                    if current_config.current_session_provider.is_none() {
+                        api_config.set(loaded_config);
+                        
+                        let (provider_name, model_name) = api_config.get_current_provider_and_model();
+                        
+                        // Debug logging
+                        use gloo_console::log;
+                        log!("🔍 playground::use_effect_with - Provider: {}, Model: {}", &provider_name, &model_name);
+                        
+                    }
                 }
             }
 
@@ -160,6 +359,10 @@ pub fn flexible_llm_playground() -> Html {
                 if let Ok(loaded_sessions) =
                     serde_json::from_str::<HashMap<String, ChatSession>>(&sessions_str)
                 {
+                    for session in loaded_sessions.iter()
+                    {
+                        log!(format!("🗨️ Session {} now has {} messages", session.0, session.1.messages.len()));
+                    }
                     sessions.set(loaded_sessions);
                 }
             }
@@ -259,8 +462,10 @@ pub fn flexible_llm_playground() -> Html {
         let api_config = api_config.clone();
         let show_model_selector = show_model_selector.clone();
         Callback::from(move |(provider_name, model_name): (String, String)| {
+            log!("🆕 Creating new session with provider: {}, model: {}", &provider_name, &model_name);
+            
             let session_id = format!("session_{}", js_sys::Date::now() as u64);
-            let session_title = format!("{} - {}", provider_name, model_name);
+            let session_title = format!("{} - {}", &provider_name, &model_name);
 
             let new_session = ChatSession {
                 id: session_id.clone(),
@@ -273,14 +478,31 @@ pub fn flexible_llm_playground() -> Html {
 
             // Update API config with selected provider/model for this session
             let mut new_config = (*api_config).clone();
+            log!("🔧 Setting session provider to: {},{}", &provider_name, &model_name);
             new_config.set_session_provider(&provider_name, &model_name);
-            api_config.set(new_config);
+            log!("🔧 New config session provider:", format!("{:?}", &new_config.current_session_provider));
+            
+            // Set the config state and ensure it's applied immediately
+            api_config.set(new_config.clone());
+    
+            let (provider_name, model_name) = api_config.get_current_provider_and_model();
+            log!("🔍 playground::on_model_selected - Provider: {}, Model: {}", &provider_name, &model_name);
+            
+            
+            // Force a re-render to ensure the config update propagates
+            // This ensures the hook gets the updated config
+            log!("🔧 Config updated with session provider");
 
             // Add session and set as current
             let mut new_sessions = (*sessions).clone();
             new_sessions.insert(session_id.clone(), new_session);
+            for session in new_sessions.iter()
+            {
+                log!(format!("🗨️ Session {} now has {} messages", session.0, session.1.messages.len()));
+            }
             sessions.set(new_sessions);
-            current_session_id.set(Some(session_id));
+            current_session_id.set(Some(session_id.clone()));
+            log!("🔧 Set current session to: {}", &session_id);
             show_model_selector.set(false);
         })
     };
@@ -305,6 +527,10 @@ pub fn flexible_llm_playground() -> Html {
         Callback::from(move |session_id: String| {
             let mut new_sessions = (*sessions).clone();
             new_sessions.remove(&session_id);
+            for session in new_sessions.iter()
+            {
+                log!(format!("🗨️ Session {} now has {} messages", session.0, session.1.messages.len()));
+            }
             sessions.set(new_sessions);
 
             // If we're deleting the current session, clear current session
@@ -320,6 +546,10 @@ pub fn flexible_llm_playground() -> Html {
             let mut new_sessions = (*sessions).clone();
             if let Some(session) = new_sessions.get_mut(&session_id) {
                 session.pinned = !session.pinned;
+                for session in new_sessions.iter()
+                {
+                    log!(format!("🗨️ Session {} now has {} messages", session.0, session.1.messages.len()));
+                }
                 sessions.set(new_sessions);
             }
         })
@@ -334,6 +564,10 @@ pub fn flexible_llm_playground() -> Html {
                 if let Some(session) = new_sessions.get_mut(session_id) {
                     session.messages.clear();
                     session.updated_at = js_sys::Date::now();
+                    for session in new_sessions.iter()
+                    {
+                        log!(format!("🗨️ Session {} now has {} messages", session.0, session.1.messages.len()));
+                    }
                     sessions.set(new_sessions);
                 }
             }
@@ -353,6 +587,13 @@ pub fn flexible_llm_playground() -> Html {
         let show_settings = show_settings.clone();
         Callback::from(move |config: FlexibleApiConfig| {
             api_config.set(config);
+    
+            let (provider_name, model_name) = api_config.get_current_provider_and_model();
+            
+            // Debug logging
+            use gloo_console::log;
+            log!("🔍 playground::save_settings - Provider: {}, Model: {}", &provider_name, &model_name);
+            
             show_settings.set(false);
         })
     };
@@ -380,15 +621,52 @@ pub fn flexible_llm_playground() -> Html {
     };
 
 
-    // Wrapper for send_message hook to handle UI callback
+    // Handle user message submission
     let send_message_ui = {
-        let send_message = send_message.clone();
+        let api_config = api_config.clone();
+        let sessions = sessions.clone();
+        let current_session_id = current_session_id.clone();
         let current_message = current_message.clone();
+        let send_to_llm = send_to_llm.clone();
         Callback::from(move |_: ()| {
             let message_content = (*current_message).clone();
-            if !message_content.trim().is_empty() {
+            if !message_content.trim().is_empty() && current_session_id.is_some() {
+                let session_id = current_session_id.as_ref().unwrap();
+                
+                // Create user message
+                let user_message = Message {
+                    id: format!("user_{}", js_sys::Date::now() as u64),
+                    role: MessageRole::User,
+                    content: message_content.clone(),
+                    timestamp: js_sys::Date::now(),
+                    function_call: None,
+                    function_response: None,
+                };
+
+                    
+                let (provider_name, model_name) = api_config.get_current_provider_and_model();
+                
+                // Debug logging
+                use gloo_console::log;
+                log!("🔍 playground::send_message_ui - Provider: {}, Model: {}", &provider_name, &model_name);
+                
+                // Add user message to session
+                let mut new_sessions = (*sessions).clone();
+                if let Some(session) = new_sessions.get_mut(session_id) {
+                    session.messages.push(user_message);
+                    session.updated_at = js_sys::Date::now();
+                    
+                    // Send all messages to LLM with current config
+                    if let Some(callback) = send_to_llm.as_ref() {
+                        callback.emit((session.messages.clone(), (*api_config).clone()));
+                    }
+                }
+                for session in new_sessions.iter()
+                {
+                    log!(format!("🗨️ Session {} now has {} messages", session.0, session.1.messages.len()));
+                }
+                sessions.set(new_sessions);
                 current_message.set(String::new());
-                send_message.emit(message_content);
             }
         })
     };

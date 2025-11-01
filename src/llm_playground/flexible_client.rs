@@ -101,13 +101,33 @@ impl FlexibleLLMClient {
         config: &FlexibleApiConfig,
     ) -> Pin<Box<dyn Future<Output = Result<LLMResponse, String>>>> {
         let (provider_name, model_name) = config.get_current_provider_and_model();
+        
+        // Debug logging
+        use gloo_console::log;
+        log!("🔍 FlexibleLLMClient::send_message - Provider: {}, Model: {}", &provider_name, &model_name);
+        log!("🔍 Session provider setting:", format!("{:?}", &config.current_session_provider));
+        log!("🔍 Router default: {}", &config.router.default);
 
         if let Some(provider) = config.get_provider(&provider_name) {
+            log!("🔍 Found provider: {}", &provider.name);
+            log!("🔍 Provider transformer:", format!("{:?}", &provider.transformer.r#use));
+            log!("🔍 Provider API URL: {}", &provider.api_base_url);
+            
             let client = self.get_client_for_provider(provider);
             let legacy_config = self.create_legacy_config(provider, config, &model_name);
+            
+            // Log which client type we're using
+            if provider.transformer.r#use.contains(&"gemini".to_string()) {
+                log!("🔍 Using GeminiClient for provider: {}", &provider_name);
+            } else {
+                log!("🔍 Using OpenAIClient for provider: {}", &provider_name);
+            }
+            
             client.send_message(messages, &legacy_config)
         } else {
-            Box::pin(async move { Err(format!("Provider '{}' not found", provider_name)) })
+            let provider_name_clone = provider_name.clone();
+            log!("❌ Provider '{}' not found in config", &provider_name);
+            Box::pin(async move { Err(format!("Provider '{}' not found", provider_name_clone)) })
         }
     }
 
