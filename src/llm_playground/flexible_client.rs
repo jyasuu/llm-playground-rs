@@ -1,6 +1,6 @@
 // Flexible LLM client that can work with any provider configuration
 use crate::llm_playground::api_clients::{
-    GeminiClient, LLMClient, LLMResponse, OpenAIClient, StreamCallback,
+    GeminiClient, LLMClient, LLMResponse, OpenAIClient, StreamCallback, UnifiedMessage,
 };
 use crate::llm_playground::{
     provider_config::{FlexibleApiConfig, ProviderConfig},
@@ -123,7 +123,18 @@ impl FlexibleLLMClient {
                 log!("🔍 Using OpenAIClient for provider: {}", &provider_name);
             }
             
-            client.send_message(messages, &legacy_config)
+            // Convert legacy messages to unified format
+            let unified_messages = client.convert_legacy_messages(messages);
+            
+            // Extract system prompt from config
+            let system_prompt = if config.system_prompt.is_empty() {
+                None
+            } else {
+                Some(config.system_prompt.as_str())
+            };
+            
+            log!("📤 Sending to {} client with {} unified messages...", client.client_name(), unified_messages.len());
+            client.send_message(&unified_messages, &legacy_config, system_prompt)
         } else {
             let provider_name_clone = provider_name.clone();
             log!("❌ Provider '{}' not found in config", &provider_name);
@@ -142,7 +153,17 @@ impl FlexibleLLMClient {
         if let Some(provider) = config.get_provider(&provider_name) {
             let client = self.get_client_for_provider(provider);
             let legacy_config = self.create_legacy_config(provider, config, &model_name);
-            client.send_message_stream(messages, &legacy_config, callback)
+            // Convert legacy messages to unified format
+            let unified_messages = client.convert_legacy_messages(messages);
+            
+            // Extract system prompt from config
+            let system_prompt = if config.system_prompt.is_empty() {
+                None
+            } else {
+                Some(config.system_prompt.as_str())
+            };
+            
+            client.send_message_stream(&unified_messages, &legacy_config, system_prompt, callback)
         } else {
             Box::pin(async move { Err(format!("Provider '{}' not found", provider_name)) })
         }
@@ -228,7 +249,13 @@ impl FlexibleLLMClient {
         }];
 
         Box::pin(async move {
-            match client.send_message(&test_messages, &legacy_config).await {
+            // Convert legacy messages to unified format
+            let unified_messages = client.convert_legacy_messages(&test_messages);
+            
+            // No system prompt for test
+            let system_prompt = None;
+            
+            match client.send_message(&unified_messages, &legacy_config, system_prompt).await {
                 Ok(_) => Ok("Connection successful".to_string()),
                 Err(e) => Err(format!("Connection failed: {}", e)),
             }

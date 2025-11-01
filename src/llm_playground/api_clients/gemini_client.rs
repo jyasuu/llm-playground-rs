@@ -1,7 +1,7 @@
 // Gemini API client for WASM
 use crate::llm_playground::api_clients::{
     ConversationManager, ConversationMessage, FunctionCallRequest, FunctionResponse, LLMClient,
-    LLMResponse, StreamCallback,
+    LLMResponse, StreamCallback, UnifiedMessage, UnifiedMessageRole,
 };
 use crate::llm_playground::{ApiConfig, Message, MessageRole};
 use gloo_console::log;
@@ -93,18 +93,19 @@ impl GeminiClient {
         }
     }
 
-    fn convert_messages_to_contents(
+    fn convert_unified_messages_to_contents(
         &self,
-        messages: &[Message],
+        messages: &[UnifiedMessage],
+        system_prompt: Option<&str>,
     ) -> (Vec<Content>, Option<SystemInstruction>) {
         let mut contents = Vec::new();
         let mut system_instruction = None;
 
-        // Use system prompt if available
-        if let Some(system_prompt) = &self.system_prompt {
+        // Use system prompt if provided
+        if let Some(prompt) = system_prompt {
             system_instruction = Some(SystemInstruction {
                 parts: vec![Part {
-                    text: Some(system_prompt.clone()),
+                    text: Some(prompt.to_string()),
                     function_call: None,
                     function_response: None,
                 }],
@@ -147,82 +148,87 @@ impl GeminiClient {
             }
         }
 
-        // Add new messages
+        // Add new unified messages
         for message in messages {
             match message.role {
-                MessageRole::System => {
-                    if system_instruction.is_none() {
+                UnifiedMessageRole::System => {
+                    if system_instruction.is_none() && message.content.is_some() {
                         system_instruction = Some(SystemInstruction {
                             parts: vec![Part {
-                                text: Some(message.content.clone()),
+                                text: message.content.clone(),
                                 function_call: None,
                                 function_response: None,
                             }],
                         });
                     }
                 }
-                MessageRole::User => {
-                    if !message.content.trim().is_empty() {
-                        let mut parts = vec![Part {
-                            text: Some(message.content.clone()),
-                            function_call: None,
-                            function_response: None,
-                        }];
+                UnifiedMessageRole::User => {
+                    let mut parts = Vec::new();
 
-                        if let Some(fc) = &message.function_call {
+                    // Add text content if present
+                    if let Some(content) = &message.content {
+                        if !content.trim().is_empty() {
                             parts.push(Part {
-                                text: None,
-                                function_call: Some(fc.clone()),
+                                text: Some(content.clone()),
+                                function_call: None,
                                 function_response: None,
                             });
                         }
+                    }
 
-                        if let Some(fr) = &message.function_response {
-                            parts.push(Part {
-                                text: None,
-                                function_call: None,
-                                function_response: Some(fr.clone()),
-                            });
-                        }
+                    // Add function responses
+                    for func_response in &message.function_responses {
+                        let response_json = serde_json::json!({
+                            "name": func_response.name,
+                            "response": {
+                                "output": serde_json::to_string(&func_response.response).unwrap_or_default()
+                            }
+                        });
+                        parts.push(Part {
+                            text: None,
+                            function_call: None,
+                            function_response: Some(response_json),
+                        });
+                    }
 
+                    if !parts.is_empty() {
                         contents.push(Content {
                             parts,
                             role: "user".to_string(),
                         });
                     }
                 }
-                MessageRole::Assistant => {
-                    if !message.content.trim().is_empty() {
-                        let mut parts = vec![Part {
-                            text: Some(message.content.clone()),
-                            function_call: None,
-                            function_response: None,
-                        }];
+                UnifiedMessageRole::Assistant => {
+                    let mut parts = Vec::new();
 
-                        if let Some(fc) = &message.function_call {
+                    // Add text content if present
+                    if let Some(content) = &message.content {
+                        if !content.trim().is_empty() {
                             parts.push(Part {
-                                text: None,
-                                function_call: Some(fc.clone()),
+                                text: Some(content.clone()),
+                                function_call: None,
                                 function_response: None,
                             });
                         }
+                    }
 
+                    // Add function calls
+                    for func_call in &message.function_calls {
+                        let call_json = serde_json::json!({
+                            "name": func_call.name,
+                            "args": func_call.arguments
+                        });
+                        parts.push(Part {
+                            text: None,
+                            function_call: Some(call_json),
+                            function_response: None,
+                        });
+                    }
+
+                    if !parts.is_empty() {
                         contents.push(Content {
                             parts,
                             role: "model".to_string(),
-                        });
-                    }
-                }
-                MessageRole::Function => {
-                    // Handle function messages as user messages with function responses
-                    if let Some(fr) = &message.function_response {
-                        contents.push(Content {
-                            parts: vec![Part {
-                                text: None,
-                                function_call: None,
-                                function_response: Some(fr.clone()),
-                            }],
-                            role: "user".to_string(),
                         });
                     }
                 }
@@ -279,10 +285,11 @@ impl GeminiClient {
 impl LLMClient for GeminiClient {
     fn send_message(
         &self,
-        messages: &[Message],
+        messages: &[UnifiedMessage],
         config: &ApiConfig,
+        system_prompt: Option<&str>,
     ) -> Pin<Box<dyn Future<Output = Result<LLMResponse, String>>>> {
-        let (contents, system_instruction) = self.convert_messages_to_contents(messages);
+        let (contents, system_instruction) = self.convert_unified_messages_to_contents(messages, system_prompt);
         let tools = self.build_tools(config);
         let api_key = config.gemini.api_key.clone();
         let model = config.gemini.model.clone();
@@ -391,14 +398,8 @@ impl LLMClient for GeminiClient {
                         function_call.get("name").and_then(|v| v.as_str()),
                         function_call.get("args"),
                     ) {
-                        // Use the function call ID from Gemini (or generate one if not provided)
-                        let id = function_call
-                            .get("id")
-                            .and_then(|v| v.as_str())
-                            .map(|s| s.to_string())
-                            .unwrap_or_else(|| {
-                                format!("fc-{}-{}", name, js_sys::Date::now() as u64)
-                            });
+                        // Generate function call ID for Gemini (Gemini doesn't provide IDs)
+                        let id = format!("gemini-fc-{}-{}", name, js_sys::Date::now() as u64);
 
                         function_calls.push(FunctionCallRequest {
                             id,
@@ -420,11 +421,12 @@ impl LLMClient for GeminiClient {
 
     fn send_message_stream(
         &self,
-        messages: &[Message],
+        messages: &[UnifiedMessage],
         config: &ApiConfig,
+        system_prompt: Option<&str>,
         callback: StreamCallback,
     ) -> Pin<Box<dyn Future<Output = Result<(), String>>>> {
-        let (contents, system_instruction) = self.convert_messages_to_contents(messages);
+        let (contents, system_instruction) = self.convert_unified_messages_to_contents(messages, system_prompt);
         let tools = self.build_tools(config);
         let api_key = config.gemini.api_key.clone();
         let model = config.gemini.model.clone();
@@ -556,6 +558,74 @@ impl LLMClient for GeminiClient {
 
             Ok(model_names)
         })
+    }
+
+    fn convert_legacy_messages(&self, messages: &[Message]) -> Vec<UnifiedMessage> {
+        let mut unified_messages = Vec::new();
+
+        for message in messages {
+            let role = match message.role {
+                MessageRole::System => UnifiedMessageRole::System,
+                MessageRole::User => UnifiedMessageRole::User,
+                MessageRole::Assistant => UnifiedMessageRole::Assistant,
+                MessageRole::Function => UnifiedMessageRole::User, // Function responses become user messages
+            };
+
+            let mut function_calls = Vec::new();
+            let mut function_responses = Vec::new();
+
+            // Convert legacy function calls
+            if let Some(fc) = &message.function_call {
+                if let Ok(func_calls) = serde_json::from_value::<Vec<serde_json::Value>>(fc.clone()) {
+                    for func_call in func_calls {
+                        if let (Some(name), Some(args)) = (
+                            func_call.get("name").and_then(|v| v.as_str()),
+                            func_call.get("args").or_else(|| func_call.get("arguments")),
+                        ) {
+                            let id = func_call
+                                .get("id")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string())
+                                .unwrap_or_else(|| {
+                                    format!("gemini-fc-{}-{}", name, js_sys::Date::now() as u64)
+                                });
+
+                            function_calls.push(FunctionCallRequest {
+                                id,
+                                name: name.to_string(),
+                                arguments: args.clone(),
+                            });
+                        }
+                    }
+                }
+            }
+
+            // Convert legacy function responses
+            if let Some(fr) = &message.function_response {
+                if let (Some(id), Some(name), Some(response)) = (
+                    fr.get("id").and_then(|v| v.as_str()),
+                    fr.get("name").and_then(|v| v.as_str()),
+                    fr.get("response"),
+                ) {
+                    function_responses.push(FunctionResponse {
+                        id: id.to_string(),
+                        name: name.to_string(),
+                        response: response.clone(),
+                    });
+                }
+            }
+
+            unified_messages.push(UnifiedMessage {
+                id: message.id.clone(),
+                role,
+                content: if message.content.is_empty() { None } else { Some(message.content.clone()) },
+                timestamp: message.timestamp,
+                function_calls,
+                function_responses,
+            });
+        }
+
+        unified_messages
     }
 }
 

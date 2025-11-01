@@ -12,7 +12,7 @@ pub type FunctionCallHandler =
     Box<dyn Fn(FunctionCallRequest) -> Pin<Box<dyn Future<Output = FunctionResponse>>> + 'static>;
 
 // Represents a function call request from the LLM
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FunctionCallRequest {
     pub id: String,
     pub name: String,
@@ -27,17 +27,38 @@ pub struct LLMResponse {
     pub finish_reason: Option<String>,
 }
 
+// Unified message structure for internal LLM client communication
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct UnifiedMessage {
+    pub id: String,
+    pub role: UnifiedMessageRole,
+    pub content: Option<String>,
+    pub timestamp: f64,
+    pub function_calls: Vec<FunctionCallRequest>,
+    pub function_responses: Vec<FunctionResponse>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum UnifiedMessageRole {
+    System,
+    User,
+    Assistant,
+}
+
+// Updated LLMClient trait with unified interface
 pub trait LLMClient {
     fn send_message(
         &self,
-        messages: &[Message],
+        messages: &[UnifiedMessage],
         config: &ApiConfig,
+        system_prompt: Option<&str>,
     ) -> Pin<Box<dyn Future<Output = Result<LLMResponse, String>>>>;
 
     fn send_message_stream(
         &self,
-        messages: &[Message],
+        messages: &[UnifiedMessage],
         config: &ApiConfig,
+        system_prompt: Option<&str>,
         callback: StreamCallback,
     ) -> Pin<Box<dyn Future<Output = Result<(), String>>>>;
 
@@ -48,6 +69,9 @@ pub trait LLMClient {
         &self,
         config: &ApiConfig,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<String>, String>>>>;
+
+    // Convert from the legacy Message format to UnifiedMessage
+    fn convert_legacy_messages(&self, messages: &[Message]) -> Vec<UnifiedMessage>;
 }
 
 // Trait for conversation management
@@ -68,7 +92,7 @@ pub struct ConversationMessage {
     pub function_response: Option<serde_json::Value>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FunctionResponse {
     pub id: String,
     pub name: String,

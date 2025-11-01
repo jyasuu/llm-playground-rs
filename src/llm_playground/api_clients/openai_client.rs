@@ -1,7 +1,7 @@
 // OpenAI-compatible API client for WASM
 use crate::llm_playground::api_clients::{
     ConversationManager, ConversationMessage, FunctionCallRequest, FunctionResponse, LLMClient,
-    LLMResponse, StreamCallback,
+    LLMResponse, StreamCallback, UnifiedMessage, UnifiedMessageRole,
 };
 use crate::llm_playground::{ApiConfig, Message, MessageRole};
 use gloo_console::log;
@@ -84,14 +84,14 @@ impl OpenAIClient {
         let _ = JsFuture::from(promise).await;
     }
 
-    fn convert_messages_to_openai(&self, messages: &[Message]) -> Vec<OpenAIMessage> {
+    fn convert_unified_messages_to_openai(&self, messages: &[UnifiedMessage], system_prompt: Option<&str>) -> Vec<OpenAIMessage> {
         let mut openai_messages = Vec::new();
 
-        // Add system message if available
-        if let Some(system_prompt) = &self.system_prompt {
+        // Add system message if provided
+        if let Some(prompt) = system_prompt {
             openai_messages.push(OpenAIMessage {
                 role: "system".to_string(),
-                content: Some(system_prompt.clone()),
+                content: Some(prompt.to_string()),
                 name: None,
                 tool_calls: None,
                 tool_call_id: None,
@@ -183,91 +183,75 @@ impl OpenAIClient {
             }
         }
 
-        // Add new messages
+        // Add new unified messages
         for message in messages {
-            log!("message_json");
+            log!("unified_message_json");
             let message_json = serde_json::json!(message.clone());
             log!(message_json.to_string());
 
             let role = match message.role {
-                MessageRole::System => {
+                UnifiedMessageRole::System => {
                     if openai_messages.is_empty() || openai_messages[0].role != "system" {
                         "system"
                     } else {
                         continue; // Skip if we already have a system message
                     }
                 }
-                MessageRole::User => "user",
-                MessageRole::Assistant => "assistant",
-                MessageRole::Function => "tool",
+                UnifiedMessageRole::User => "user",
+                UnifiedMessageRole::Assistant => "assistant",
             };
 
-            let mut openai_msg = OpenAIMessage {
-                role: role.to_string(),
-                content: if message.content.is_empty() {
-                    None
-                } else {
-                    Some(message.content.clone())
-                },
-                name: None,
-                tool_calls: None,
-                tool_call_id: None,
-            };
+            // Handle assistant messages with function calls
+            if message.role == UnifiedMessageRole::Assistant && !message.function_calls.is_empty() {
+                let mut openai_msg = OpenAIMessage {
+                    role: "assistant".to_string(),
+                    content: message.content.clone(),
+                    name: None,
+                    tool_calls: None,
+                    tool_call_id: None,
+                };
 
-            // Handle function response messages
-            if message.role == MessageRole::Function {
-                if let Some(func_response) = &message.function_response {
-                    if let Some(call_id) = func_response.get("id").and_then(|v| v.as_str()) {
-                        openai_msg.tool_call_id = Some(call_id.to_string());
-                    }
-                    // IMPORTANT: Set the function name for tool messages - required by Gemini's OpenAI API
-                    if let Some(func_name) = func_response.get("name").and_then(|v| v.as_str()) {
-                        openai_msg.name = Some(func_name.to_string());
-                    }
-                    // Set content to the function response data
-                    if let Some(response_data) = func_response.get("response") {
-                        openai_msg.content =
-                            Some(serde_json::to_string(response_data).unwrap_or_default());
-                    }
+                // Convert function calls to OpenAI format
+                let mut tool_calls = Vec::new();
+                for func_call in &message.function_calls {
+                    tool_calls.push(ToolCall {
+                        id: func_call.id.clone(),
+                        call_type: "function".to_string(),
+                        function: FunctionCall {
+                            name: func_call.name.clone(),
+                            arguments: serde_json::to_string(&func_call.arguments).unwrap_or_default(),
+                        },
+                    });
                 }
+                if !tool_calls.is_empty() {
+                    openai_msg.tool_calls = Some(tool_calls);
+                }
+
+                openai_messages.push(openai_msg);
+            } else {
+                // Regular message
+                let mut openai_msg = OpenAIMessage {
+                    role: role.to_string(),
+                    content: message.content.clone(),
+                    name: None,
+                    tool_calls: None,
+                    tool_call_id: None,
+                };
+
+                openai_messages.push(openai_msg);
             }
 
-            // Handle function calls from assistant messages
-            if message.role == MessageRole::Assistant {
-                if let Some(fc) = &message.function_call {
-                    // Convert function call JSON to proper tool_calls format
-                    if let Ok(func_calls) =
-                        serde_json::from_value::<Vec<serde_json::Value>>(fc.clone())
-                    {
-                        let mut tool_calls = Vec::new();
-                        for func_call in func_calls {
-                            if let (Some(id), Some(name), Some(args)) = (
-                                func_call.get("id").and_then(|v| v.as_str()),
-                                func_call.get("name").and_then(|v| v.as_str()),
-                                func_call.get("arguments"),
-                            ) {
-                                tool_calls.push(ToolCall {
-                                    id: id.to_string(),
-                                    call_type: "function".to_string(),
-                                    function: FunctionCall {
-                                        name: name.to_string(),
-                                        arguments: serde_json::to_string(args).unwrap_or_default(),
-                                    },
-                                });
-                            }
-                        }
-                        if !tool_calls.is_empty() {
-                            openai_msg.tool_calls = Some(tool_calls);
-                        }
-                    }
-                }
+            // Add function response messages as separate tool messages
+            for func_response in &message.function_responses {
+                let tool_msg = OpenAIMessage {
+                    role: "tool".to_string(),
+                    content: Some(serde_json::to_string(&func_response.response).unwrap_or_default()),
+                    name: Some(func_response.name.clone()),
+                    tool_calls: None,
+                    tool_call_id: Some(func_response.id.clone()),
+                };
+                openai_messages.push(tool_msg);
             }
-
-            log!("openai_msg_json");
-            let openai_msg_json = serde_json::json!(openai_msg.clone());
-            log!(openai_msg_json.to_string());
-
-            openai_messages.push(openai_msg);
         }
 
         openai_messages
@@ -298,8 +282,9 @@ impl OpenAIClient {
 
     async fn send_message_internal(
         &self,
-        messages: &[Message],
+        messages: &[UnifiedMessage],
         config: &ApiConfig,
+        system_prompt: Option<&str>,
     ) -> Result<String, String> {
         log!("OpenAI API call started");
 
@@ -307,7 +292,7 @@ impl OpenAIClient {
             return Err("Please configure your OpenAI API key in Settings".to_string());
         }
 
-        let openai_messages = self.convert_messages_to_openai(messages);
+        let openai_messages = self.convert_unified_messages_to_openai(messages, system_prompt);
         let tools = self.build_tools(config);
 
         let mut request_body = serde_json::json!({
@@ -387,14 +372,16 @@ impl OpenAIClient {
 impl LLMClient for OpenAIClient {
     fn send_message(
         &self,
-        messages: &[Message],
+        messages: &[UnifiedMessage],
         config: &ApiConfig,
+        system_prompt: Option<&str>,
     ) -> Pin<Box<dyn Future<Output = Result<LLMResponse, String>>>> {
         let self_clone = self.clone();
         let messages_clone = messages.to_vec();
         let config_clone = config.clone();
+        let system_prompt_clone = system_prompt.map(|s| s.to_string());
 
-        log!("messages_json");
+        log!("unified_messages_json");
         let messages_json = serde_json::json!(messages_clone.clone());
         log!(messages_json.to_string());
 
@@ -404,7 +391,7 @@ impl LLMClient for OpenAIClient {
                 return Err("Please configure your OpenAI API key in Settings".to_string());
             }
 
-            let openai_messages = self_clone.convert_messages_to_openai(&messages_clone);
+            let openai_messages = self_clone.convert_unified_messages_to_openai(&messages_clone, system_prompt_clone.as_deref());
 
             log!("openai_messages_json");
             let openai_messages_json = serde_json::json!(openai_messages.clone());
@@ -529,11 +516,12 @@ impl LLMClient for OpenAIClient {
 
     fn send_message_stream(
         &self,
-        messages: &[Message],
+        messages: &[UnifiedMessage],
         config: &ApiConfig,
+        system_prompt: Option<&str>,
         callback: StreamCallback,
     ) -> Pin<Box<dyn Future<Output = Result<(), String>>>> {
-        let openai_messages = self.convert_messages_to_openai(messages);
+        let openai_messages = self.convert_unified_messages_to_openai(messages, system_prompt);
         let tools = self.build_tools(config);
         let api_key = config.openai.api_key.clone();
         let base_url = config.openai.base_url.clone();
@@ -662,6 +650,76 @@ impl LLMClient for OpenAIClient {
 
             Ok(model_names)
         })
+    }
+
+    fn convert_legacy_messages(&self, messages: &[Message]) -> Vec<UnifiedMessage> {
+        let mut unified_messages = Vec::new();
+        let mut function_call_id_counter = 0u32;
+
+        for message in messages {
+            let role = match message.role {
+                MessageRole::System => UnifiedMessageRole::System,
+                MessageRole::User => UnifiedMessageRole::User,
+                MessageRole::Assistant => UnifiedMessageRole::Assistant,
+                MessageRole::Function => UnifiedMessageRole::User, // Function responses become user messages
+            };
+
+            let mut function_calls = Vec::new();
+            let mut function_responses = Vec::new();
+
+            // Convert legacy function calls
+            if let Some(fc) = &message.function_call {
+                if let Ok(func_calls) = serde_json::from_value::<Vec<serde_json::Value>>(fc.clone()) {
+                    for func_call in func_calls {
+                        if let (Some(name), Some(args)) = (
+                            func_call.get("name").and_then(|v| v.as_str()),
+                            func_call.get("arguments"),
+                        ) {
+                            let id = func_call
+                                .get("id")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string())
+                                .unwrap_or_else(|| {
+                                    function_call_id_counter += 1;
+                                    format!("call_{}", function_call_id_counter)
+                                });
+
+                            function_calls.push(FunctionCallRequest {
+                                id,
+                                name: name.to_string(),
+                                arguments: args.clone(),
+                            });
+                        }
+                    }
+                }
+            }
+
+            // Convert legacy function responses
+            if let Some(fr) = &message.function_response {
+                if let (Some(id), Some(name), Some(response)) = (
+                    fr.get("id").and_then(|v| v.as_str()),
+                    fr.get("name").and_then(|v| v.as_str()),
+                    fr.get("response"),
+                ) {
+                    function_responses.push(FunctionResponse {
+                        id: id.to_string(),
+                        name: name.to_string(),
+                        response: response.clone(),
+                    });
+                }
+            }
+
+            unified_messages.push(UnifiedMessage {
+                id: message.id.clone(),
+                role,
+                content: if message.content.is_empty() { None } else { Some(message.content.clone()) },
+                timestamp: message.timestamp,
+                function_calls,
+                function_responses,
+            });
+        }
+
+        unified_messages
     }
 }
 

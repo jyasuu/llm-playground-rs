@@ -59,20 +59,7 @@ pub fn use_llm_chat(
                 // Use the config passed directly from the playground
                 let mut current_messages = messages;
 
-                // Add system message if exists
-                if !config.system_prompt.trim().is_empty() {
-                    current_messages.insert(
-                        0,
-                        Message {
-                            id: "system".to_string(),
-                            role: MessageRole::System,
-                            content: config.system_prompt.clone(),
-                            timestamp: js_sys::Date::now(),
-                            function_call: None,
-                            function_response: None,
-                        },
-                    );
-                }
+                // Note: System prompt is now handled inside the API clients, not here
 
                 // Send single request to LLM (no loop - playground will handle function call responses)
                 log!("🚀 Sending {} messages to LLM", current_messages.len());

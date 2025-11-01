@@ -7,5 +7,5 @@ pub use gemini_client::GeminiClient;
 pub use openai_client::OpenAIClient;
 pub use traits::{
     ConversationManager, ConversationMessage, FunctionCallRequest, FunctionResponse, LLMClient,
-    LLMResponse, StreamCallback,
+    LLMResponse, StreamCallback, UnifiedMessage, UnifiedMessageRole,
 };
