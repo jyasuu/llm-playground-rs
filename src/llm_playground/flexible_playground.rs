@@ -11,7 +11,7 @@ use crate::llm_playground::{
     components::notification::{use_notifications, NotificationContainer, NotificationMessage, NotificationType},
     flexible_client::FlexibleLLMClient,
     mcp_client::McpClient,
-    ChatHeader, ChatRoom, ChatSession, FlexibleApiConfig, FlexibleSettingsPanel, InputBar,
+    ChatHeader, Chatroom, ChatSession, FlexibleApiConfig, FlexibleSettingsPanel,
     ModelSelector, Sidebar, Message, MessageRole,
 };
 
@@ -30,312 +30,14 @@ pub fn flexible_llm_playground() -> Html {
     let show_settings = use_state(|| false);
     let show_model_selector = use_state(|| false);
     let dark_mode = use_state(|| false);
-    let current_message = use_state(|| String::new());
     let llm_client = use_state(|| FlexibleLLMClient::new());
     let mcp_client = use_state(|| Option::<McpClient>::None);
-
-    // New state-driven message flow
-    let is_loading = use_state(|| false);
-    let send_message_trigger = use_state(|| false);
-    let function_call_trigger = use_state(|| Option::<serde_json::Value>::None);
 
     // Notification system
     let (notifications, add_notification, dismiss_notification) = use_notifications();
 
-    // Helper function to check if error is retryable (429 rate limit)
-    let is_retryable_error = |error: &str| -> bool {
-        error.contains("429")
-            || error.contains("Rate limit exceeded")
-            || error.contains("rate limit")
-    };
 
-    // Helper function for exponential backoff delay
-    let calculate_retry_delay = |base_delay: u32, attempt: u32| -> u32 {
-        base_delay * (2_u32.pow(attempt.min(5))) // Cap at 2^5 to prevent excessive delays
-    };
 
-    // Function call execution effect
-    {
-        let function_call_trigger = function_call_trigger.clone();
-        let sessions = sessions.clone();
-        let current_session_id = current_session_id.clone();
-        let api_config = api_config.clone();
-        let mcp_client = mcp_client.clone();
-        let send_message_trigger = send_message_trigger.clone();
-
-        use_effect_with(function_call_trigger.clone(), move |trigger_data| {
-            if let Some(function_calls_json) = trigger_data.as_ref() {
-                log!("🔧 Function call trigger activated");
-                function_call_trigger.set(None); // Reset trigger
-                
-                if let Some(session_id) = current_session_id.as_ref() {
-                    if let Ok(function_calls) = serde_json::from_value::<Vec<serde_json::Value>>(function_calls_json.clone()) {
-                        let sessions_clone = sessions.clone();
-                        let current_session_id_clone = current_session_id.clone();
-                        let api_config_clone = api_config.clone();
-                        let mcp_client_clone = mcp_client.clone();
-                        let send_message_trigger_clone = send_message_trigger.clone();
-                        let session_id_str = session_id.clone();
-
-                        wasm_bindgen_futures::spawn_local(async move {
-                            // Execute all function calls
-                            for function_call_json in &function_calls {
-                                if let (Some(name), Some(id), Some(arguments)) = (
-                                    function_call_json.get("name").and_then(|v| v.as_str()),
-                                    function_call_json.get("id").and_then(|v| v.as_str()),
-                                    function_call_json.get("arguments")
-                                ) {
-                                    log!("🔧 Executing function: {} (ID: {})", name, id);
-                                    
-                                    // Execute function call
-                                    let response_value = if let Some(tool) = api_config_clone
-                                        .function_tools
-                                        .iter()
-                                        .find(|tool| tool.name == name)
-                                    {
-                                        if tool.is_builtin {
-                                            // Execute built-in tool
-                                            match crate::llm_playground::builtin_tools::execute_builtin_tool(
-                                                name, 
-                                                arguments, 
-                                                mcp_client_clone.as_ref()
-                                            ).await {
-                                                Ok(result) => result,
-                                                Err(error) => serde_json::json!({"error": error}),
-                                            }
-                                        } else {
-                                            // Use mock response
-                                            serde_json::from_str(&tool.mock_response)
-                                                .unwrap_or_else(|_| serde_json::json!({"result": tool.mock_response.clone()}))
-                                        }
-                                    } else {
-                                        serde_json::json!({"error": "Unknown function tool"})
-                                    };
-
-                                    // Add function response message
-                                    let function_response_message = Message {
-                                        id: format!("msg_fr_{}", js_sys::Date::now() as u64),
-                                        role: MessageRole::Function,
-                                        content: format!("Function {} executed", name),
-                                        timestamp: js_sys::Date::now(),
-                                        function_call: None,
-                                        function_response: Some(serde_json::json!({
-                                            "id": id,
-                                            "name": name,
-                                            "response": response_value
-                                        })),
-                                    };
-                                    
-                                    // Update session with function response
-                                    let mut updated_sessions = (*sessions_clone).clone();
-                                    if let Some(session) = updated_sessions.get_mut(&session_id_str) {
-                                        session.messages.push(function_response_message);
-                                        session.updated_at = js_sys::Date::now();
-                                    }
-                                    sessions_clone.set(updated_sessions);
-                                }
-                            }
-                            
-                            // Trigger next LLM call after all function executions are complete
-                            log!("🔄 All functions executed, triggering next LLM call");
-                            send_message_trigger_clone.set(true);
-                        });
-                    }
-                }
-            }
-            || ()
-        });
-    }
-
-    // State-driven LLM message sending effect
-    {
-        let send_message_trigger = send_message_trigger.clone();
-        let is_loading = is_loading.clone();
-        let sessions = sessions.clone();
-        let current_session_id = current_session_id.clone();
-        let api_config = api_config.clone();
-        let llm_client = llm_client.clone();
-        let function_call_trigger = function_call_trigger.clone();
-        let add_notification = add_notification.clone();
-
-        use_effect_with(send_message_trigger.clone(), move |trigger| {
-            if **trigger {
-                log!("🚀 Send message trigger activated");
-                send_message_trigger.set(false); // Reset trigger
-                
-                if let Some(session_id) = current_session_id.as_ref() {
-                    if let Some(session) = sessions.get(session_id) {
-                        if !session.messages.is_empty() {
-                            is_loading.set(true);
-                            
-                            let messages = session.messages.clone();
-                            let config = (*api_config).clone();
-                            let client = (*llm_client).clone();
-                            let is_loading_clone = is_loading.clone();
-                            let add_notification_clone = add_notification.clone();
-                            let sessions_clone = sessions.clone();
-                            let function_call_trigger_clone = function_call_trigger.clone();
-                            let session_id_str = session_id.clone();
-
-                            wasm_bindgen_futures::spawn_local(async move {
-                                log!("📤 Calling LLM API with {} messages...", messages.len());
-                                for (i, msg) in messages.iter().enumerate() {
-                                    let role_str = match msg.role {
-                                        MessageRole::User => "User",
-                                        MessageRole::Assistant => "Assistant", 
-                                        MessageRole::System => "System",
-                                        MessageRole::Function => "Function",
-                                    };
-                                    log!("  Message {}: {} - {}", i + 1, role_str, 
-                                        if msg.content.len() > 100 { &msg.content[..100] } else { &msg.content });
-                                }
-
-                                let mut retry_attempt = 0u32;
-                                let max_retries = 3u32;
-
-                                let api_result = loop {
-                                    log!("⏳ Attempting LLM API call (attempt {})...", retry_attempt + 1);
-                                    
-                                    let (provider_name, model_name) = config.get_current_provider_and_model();
-                                    log!("🔍 flexible_playground::send_message - Provider: {}, Model: {}", &provider_name, &model_name);
-                                    
-                                    match client.send_message(&messages, &config).await {
-                                        Ok(response) => break Ok(response),
-                                        Err(error) => {
-                                            // Check if this is a retryable error (429 rate limit)
-                                            if is_retryable_error(&error) && retry_attempt < max_retries {
-                                                retry_attempt += 1;
-                                                let delay_ms = calculate_retry_delay(
-                                                    config.shared_settings.retry_delay,
-                                                    retry_attempt - 1,
-                                                );
-
-                                                // Show notification for rate limit
-                                                let notification = NotificationMessage::new(
-                                                    format!("Rate limit hit. Retrying in {}ms... (attempt {}/{})", 
-                                                        delay_ms, retry_attempt, max_retries + 1),
-                                                    NotificationType::Warning
-                                                ).with_duration(delay_ms + 1000);
-                                                add_notification_clone.emit(notification);
-
-                                                log!(
-                                                    "Rate limit hit, retrying in {}ms (attempt {})",
-                                                    delay_ms,
-                                                    retry_attempt
-                                                );
-
-                                                // Wait before retry
-                                                TimeoutFuture::new(delay_ms).await;
-                                                continue;
-                                            } else {
-                                                // Non-retryable error or max retries exceeded
-                                                if is_retryable_error(&error) && retry_attempt >= max_retries {
-                                                    let final_error = format!("Rate limit exceeded. Max retries ({}) reached. Please wait before trying again.", max_retries + 1);
-                                                    let notification = NotificationMessage::new(
-                                                        final_error.clone(),
-                                                        NotificationType::Error,
-                                                    ).with_duration(8000);
-                                                    add_notification_clone.emit(notification);
-                                                    break Err(final_error);
-                                                } else {
-                                                    // Show notification for other errors
-                                                    let notification = NotificationMessage::new(
-                                                        format!("API Error: {}", error),
-                                                        NotificationType::Error,
-                                                    ).with_duration(6000);
-                                                    add_notification_clone.emit(notification);
-                                                    break Err(error);
-                                                }
-                                            }
-                                        }
-                                    }
-                                };
-
-                                match api_result {
-                                    Ok(response) => {
-                                        log!("✅ LLM API response received!");
-                                        log!("📊 Response details:");
-                                        log!("  - Function calls: {}", response.function_calls.len());
-                                        log!("  - Content length: {}", response.content.as_ref().map(|c| c.len()).unwrap_or(0));
-                                        
-                                        // Handle LLM response directly here
-                                        let mut new_sessions = (*sessions_clone).clone();
-                                        if let Some(session) = new_sessions.get_mut(&session_id_str) {
-                                            // Add assistant message
-                                            if response.function_calls.is_empty() {
-                                                // Regular text response - conversation ends here
-                                                if let Some(content) = &response.content {
-                                                    if !content.trim().is_empty() {
-                                                        let assistant_message = Message {
-                                                            id: format!("assistant_{}", js_sys::Date::now() as u64),
-                                                            role: MessageRole::Assistant,
-                                                            content: content.clone(),
-                                                            timestamp: js_sys::Date::now(),
-                                                            function_call: None,
-                                                            function_response: None,
-                                                        };
-                                                        session.messages.push(assistant_message);
-                                                        session.updated_at = js_sys::Date::now();
-                                                    }
-                                                }
-                                                sessions_clone.set(new_sessions);
-                                            } else {
-                                                // Function call response - trigger function execution
-                                                let assistant_message = Message {
-                                                    id: format!("msg_fc_{}", js_sys::Date::now() as u64),
-                                                    role: MessageRole::Assistant,
-                                                    content: response.content.unwrap_or_default(),
-                                                    timestamp: js_sys::Date::now(),
-                                                    function_call: Some(serde_json::json!(response
-                                                        .function_calls
-                                                        .iter()
-                                                        .map(|fc| {
-                                                            serde_json::json!({
-                                                                "id": fc.id,
-                                                                "name": fc.name,
-                                                                "arguments": fc.arguments
-                                                            })
-                                                        })
-                                                        .collect::<Vec<_>>())),
-                                                    function_response: None,
-                                                };
-                                                session.messages.push(assistant_message);
-                                                session.updated_at = js_sys::Date::now();
-                                                sessions_clone.set(new_sessions);
-
-                                                // Trigger function call execution
-                                                let function_calls_json = serde_json::json!(response
-                                                    .function_calls
-                                                    .iter()
-                                                    .map(|fc| {
-                                                        serde_json::json!({
-                                                            "id": fc.id,
-                                                            "name": fc.name,
-                                                            "arguments": fc.arguments
-                                                        })
-                                                    })
-                                                    .collect::<Vec<_>>());
-                                                
-                                                log!("🔄 Triggering function call execution");
-                                                function_call_trigger_clone.set(Some(function_calls_json));
-                                            }
-                                        }
-                                    }
-                                    Err(_error) => {
-                                        // Error already handled above with notifications
-                                        log!("❌ API error occurred");
-                                    }
-                                }
-
-                                is_loading_clone.set(false);
-                            });
-                        }
-                    }
-                }
-            }
-            || ()
-        });
-    }
 
     // Auto-initialize MCP connections when MCP config changes
     // Use a separate state to track MCP config changes to avoid infinite loops
@@ -554,6 +256,21 @@ pub fn flexible_llm_playground() -> Html {
         });
     }
 
+    // Session update callback for Chatroom component
+    let on_session_update = {
+        let sessions = sessions.clone();
+        let current_session_id = current_session_id.clone();
+        Callback::from(move |updated_session: ChatSession| {
+            if let Some(session_id) = current_session_id.as_ref() {
+                if session_id == &updated_session.id {
+                    let mut new_sessions = (*sessions).clone();
+                    new_sessions.insert(updated_session.id.clone(), updated_session);
+                    sessions.set(new_sessions);
+                }
+            }
+        })
+    };
+
     // Session management callbacks
     let create_new_session = {
         let show_model_selector = show_model_selector.clone();
@@ -727,67 +444,6 @@ pub fn flexible_llm_playground() -> Html {
     };
 
 
-    // Handle user message submission
-    let send_message_ui = {
-        let sessions = sessions.clone();
-        let current_session_id = current_session_id.clone();
-        let current_message = current_message.clone();
-        let send_message_trigger = send_message_trigger.clone();
-        Callback::from(move |_: ()| {
-            let message_content = (*current_message).clone();
-            if !message_content.trim().is_empty() && current_session_id.is_some() {
-                let session_id = current_session_id.as_ref().unwrap();
-                
-                // Create user message
-                let user_message = Message {
-                    id: format!("user_{}", js_sys::Date::now() as u64),
-                    role: MessageRole::User,
-                    content: message_content.clone(),
-                    timestamp: js_sys::Date::now(),
-                    function_call: None,
-                    function_response: None,
-                };
-
-                log!("🔍 playground::send_message_ui - Adding user message and triggering send");
-                
-                // Add user message to session
-                let mut new_sessions = (*sessions).clone();
-                if let Some(session) = new_sessions.get_mut(session_id) {
-                    session.messages.push(user_message);
-                    session.updated_at = js_sys::Date::now();
-                }
-                for session in new_sessions.iter()
-                {
-                    log!(format!("🗨️ Session {} now has {} messages", session.0, session.1.messages.len()));
-                }
-                sessions.set(new_sessions);
-                current_message.set(String::new());
-                
-                // Trigger LLM send
-                send_message_trigger.set(true);
-            }
-        })
-    };
-
-    let update_message = {
-        let current_message = current_message.clone();
-        Callback::from(move |message: String| {
-            current_message.set(message);
-        })
-    };
-
-    let create_input_event_callback = {
-        let update_message = update_message.clone();
-        move |callback: Callback<String>| {
-            Callback::from(move |e: InputEvent| {
-                if let Some(target) = e.target() {
-                    if let Ok(input) = target.dyn_into::<web_sys::HtmlTextAreaElement>() {
-                        callback.emit(input.value());
-                    }
-                }
-            })
-        }
-    };
 
     // Create a legacy API config for components that still need it
     let create_legacy_api_config = |flexible_config: &FlexibleApiConfig| {
@@ -880,15 +536,13 @@ pub fn flexible_llm_playground() -> Html {
                                     on_toggle_dark_mode={toggle_dark_mode}
                                     dark_mode={*dark_mode}
                                 />
-                                <ChatRoom
+                                <Chatroom
                                     session={Some(session.clone())}
-                                    is_loading={*is_loading}
-                                />
-                                <InputBar
-                                    current_message={(*current_message).clone()}
-                                    is_loading={*is_loading}
-                                    on_send_message={send_message_ui}
-                                    on_message_change={create_input_event_callback(update_message)}
+                                    api_config={(*api_config).clone()}
+                                    llm_client={(*llm_client).clone()}
+                                    mcp_client={(*mcp_client).clone()}
+                                    on_session_update={on_session_update}
+                                    on_notification={add_notification}
                                 />
                             </>
                         }

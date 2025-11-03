@@ -1,6 +1,7 @@
 // Component modules
 pub mod chat_header;
 pub mod chat_room;
+pub mod chatroom;
 pub mod flexible_settings_panel;
 pub mod function_call_handler;
 pub mod function_tool_editor;
@@ -15,6 +16,7 @@ pub mod visual_function_tool_editor;
 
 pub use chat_header::ChatHeader;
 pub use chat_room::ChatRoom;
+pub use chatroom::Chatroom;
 pub use flexible_settings_panel::FlexibleSettingsPanel;
 pub use function_tool_editor::FunctionToolEditor;
 pub use input_bar::InputBar;
