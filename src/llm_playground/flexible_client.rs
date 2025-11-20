@@ -45,6 +45,7 @@ impl FlexibleLLMClient {
                 gemini: GeminiConfig {
                     api_key: provider.api_key.clone(),
                     model: model.to_string(),
+                    base_url: provider.api_base_url.clone(),
                 },
                 openai: OpenAIConfig {
                     base_url: "".to_string(),
@@ -72,6 +73,7 @@ impl FlexibleLLMClient {
                 gemini: GeminiConfig {
                     api_key: "".to_string(),
                     model: "".to_string(),
+                    base_url: "".to_string(),
                 },
                 openai: OpenAIConfig {
                     base_url: provider.api_base_url.clone(),

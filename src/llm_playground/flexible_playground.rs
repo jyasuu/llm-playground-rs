@@ -456,6 +456,7 @@ pub fn flexible_llm_playground() -> Html {
                     gemini: crate::llm_playground::GeminiConfig {
                         api_key: provider.api_key.clone(),
                         model: model_name.clone(),
+                        base_url: provider.api_base_url.clone(),
                     },
                     openai: crate::llm_playground::OpenAIConfig {
                         base_url: "".to_string(),
@@ -478,6 +479,7 @@ pub fn flexible_llm_playground() -> Html {
                     gemini: crate::llm_playground::GeminiConfig {
                         api_key: "".to_string(),
                         model: "".to_string(),
+                        base_url: "".to_string(),
                     },
                     openai: crate::llm_playground::OpenAIConfig {
                         base_url: provider.api_base_url.clone(),

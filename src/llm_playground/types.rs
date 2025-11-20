@@ -24,6 +24,7 @@ pub struct ApiConfig {
 pub struct GeminiConfig {
     pub api_key: String,
     pub model: String,
+    pub base_url: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -91,6 +92,7 @@ impl Default for ApiConfig {
             gemini: GeminiConfig {
                 api_key: String::new(),
                 model: "gemini-2.5-flash-lite-preview-06-17".to_string(),
+                base_url: "https://generativelanguage.googleapis.com/v1beta/models".to_string(),
             },
             openai: OpenAIConfig {
                 base_url: "https://api.openai.com/v1".to_string(),

@@ -654,6 +654,7 @@ pub fn flexible_settings_panel(props: &FlexibleSettingsPanelProps) -> Html {
                                 gemini: crate::llm_playground::types::GeminiConfig {
                                     api_key: "".to_string(),
                                     model: "".to_string(),
+                                    base_url: "".to_string(),
                                 },
                                 openai: crate::llm_playground::types::OpenAIConfig {
                                     base_url: "".to_string(),

@@ -17,6 +17,9 @@ pub fn migrate_old_config_to_flexible(old_config: ApiConfig) -> FlexibleApiConfi
                 if !old_config.gemini.api_key.is_empty() {
                     provider.api_key = old_config.gemini.api_key.clone();
                 }
+                if !old_config.gemini.base_url.is_empty() && old_config.gemini.base_url != "https://generativelanguage.googleapis.com/v1beta/models" {
+                    provider.api_base_url = old_config.gemini.base_url.clone();
+                }
                 // Update model if it's not in the default list
                 if !provider.models.contains(&old_config.gemini.model) && !old_config.gemini.model.is_empty() {
                     provider.models.insert(0, old_config.gemini.model.clone());

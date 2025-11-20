@@ -293,6 +293,7 @@ impl LLMClient for GeminiClient {
         let tools = self.build_tools(config);
         let api_key = config.gemini.api_key.clone();
         let model = config.gemini.model.clone();
+        let base_url = config.gemini.base_url.clone();
         let temperature = config.shared_settings.temperature;
         let max_tokens = config.shared_settings.max_tokens;
 
@@ -316,8 +317,8 @@ impl LLMClient for GeminiClient {
             };
 
             let url = format!(
-                "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
-                model, api_key
+                "{}/{}:generateContent?key={}",
+                base_url.trim_end_matches('/'), model, api_key
             );
 
             let response = Request::post(&url)
@@ -430,6 +431,7 @@ impl LLMClient for GeminiClient {
         let tools = self.build_tools(config);
         let api_key = config.gemini.api_key.clone();
         let model = config.gemini.model.clone();
+        let base_url = config.gemini.base_url.clone();
         let temperature = config.shared_settings.temperature;
         let max_tokens = config.shared_settings.max_tokens;
         let config_clone = config.clone();
@@ -454,8 +456,8 @@ impl LLMClient for GeminiClient {
             };
 
             let url = format!(
-                "https://generativelanguage.googleapis.com/v1beta/models/{}:streamGenerateContent?alt=sse&key={}",
-                model, api_key
+                "{}/{}:streamGenerateContent?alt=sse&key={}",
+                base_url.trim_end_matches('/'), model, api_key
             );
 
             // For WASM, we'll use a simpler approach since we can't do proper SSE streaming
@@ -499,6 +501,7 @@ impl LLMClient for GeminiClient {
         config: &ApiConfig,
     ) -> Pin<Box<dyn Future<Output = Result<Vec<String>, String>>>> {
         let api_key = config.gemini.api_key.clone();
+        let base_url = config.gemini.base_url.clone();
 
         Box::pin(async move {
             if api_key.trim().is_empty() {
@@ -506,8 +509,8 @@ impl LLMClient for GeminiClient {
             }
 
             let url = format!(
-                "https://generativelanguage.googleapis.com/v1beta/models?key={}",
-                api_key
+                "{}?key={}",
+                base_url.trim_end_matches('/'), api_key
             );
 
             let response = Request::get(&url)
