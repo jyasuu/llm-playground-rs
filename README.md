@@ -1,370 +1,401 @@
 # llm-playground-rs
 
-```sh
+A modern Rust-based LLM playground built with Yew framework for WebAssembly. This project provides a sophisticated web interface for testing and experimenting with various Large Language Model APIs, featuring a flexible provider system, advanced function tools, and MCP (Model Context Protocol) integration.
 
+## 🚀 Features
+
+### Core Capabilities
+- **Flexible Provider System**: Support for OpenAI, Gemini, OpenRouter, Ollama, and custom providers
+- **Real-time Streaming**: Interactive conversation UI with streaming responses
+- **Advanced Function Tools**: Comprehensive built-in tools (HTTP, file system, search, agents) and custom function calling
+- **MCP Integration**: Model Context Protocol support for enhanced AI capabilities
+- **Session Management**: Persistent chat sessions with local storage
+- **Visual Function Editor**: Interactive interface for creating and editing function tools
+- **Multi-Modal Support**: Support for different content types and structured outputs
+
+### Built-in Function Tools
+- **HTTP Tools**: Fetch API for web requests
+- **File System**: Read, write, edit files and directories
+- **Search Tools**: Grep, glob pattern matching
+- **System Tools**: Bash command execution
+- **Agent Tools**: Launch specialized sub-agents for complex tasks
+- **Web Tools**: Web search and content fetching
+- **Weather API**: Real-time weather information
+- **Planning Tools**: TODO management and task planning
+
+## 🏗️ Architecture Overview
+
+### Project Structure
+```
+src/
+├── main.rs                          # Application entry point
+└── llm_playground/
+    ├── mod.rs                       # Module exports and core logic
+    ├── types.rs                     # Core type definitions
+    ├── flexible_playground.rs       # Main playground component
+    ├── flexible_client.rs          # Flexible LLM client implementation
+    ├── provider_config.rs          # Provider configuration system
+    ├── storage.rs                   # Browser storage utilities
+    ├── builtin_tools.rs            # Built-in function tool implementations
+    ├── mcp_client.rs               # Model Context Protocol client
+    ├── migration.rs                # Configuration migration utilities
+    ├── api_clients/                # LLM provider implementations
+    │   ├── mod.rs
+    │   ├── traits.rs               # Common API traits
+    │   ├── openai_client.rs        # OpenAI API client
+    │   └── gemini_client.rs        # Gemini API client
+    ├── components/                 # UI components
+    │   ├── mod.rs
+    │   ├── chat_header.rs         # Chat session header
+    │   ├── chatroom.rs            # Main chat interface
+    │   ├── chat_room.rs           # Alternative chat room component
+    │   ├── sidebar.rs             # Settings sidebar
+    │   ├── flexible_settings_panel.rs  # Flexible configuration panel
+    │   ├── settings_panel.rs      # Legacy settings panel
+    │   ├── mcp_settings_panel.rs  # MCP configuration
+    │   ├── model_selector.rs      # Model selection dropdown
+    │   ├── message_bubble.rs      # Individual message display
+    │   ├── input_bar.rs           # Message input component
+    │   ├── function_tool_editor.rs     # Function tool editor
+    │   ├── visual_function_tool_editor.rs  # Visual tool editor
+    │   ├── function_call_handler.rs    # Function execution handler
+    │   └── notification.rs        # Notification system
+    ├── hooks/                     # Custom Yew hooks
+    │   ├── mod.rs
+    │   └── use_llm_chat.rs        # LLM communication hook
+    └── examples/                  # Usage examples
+        └── mcp_integration_example.rs
+```
+
+## 🛠️ Quick Start
+
+### Prerequisites
+
+- **Rust** (latest stable version)
+- **Trunk** for WebAssembly development and serving
+- A modern web browser with WebAssembly support
+
+### Installation & Setup
+
+1. **Clone the repository:**
+```bash
+git clone https://github.com/yourusername/llm-playground-rs.git
+cd llm-playground-rs
+```
+
+2. **Install dependencies:**
+```bash
+# Install trunk for serving (recommended)
 cargo install trunk
+
+# Add WebAssembly target
 rustup target add wasm32-unknown-unknown
+```
 
-# reference http streamable mcp server client
-git clone https://github.com/modelcontextprotocol/rust-sdk.git
-# rust-sdk/examples/clients/src/streamable_http.rs
+3. **Development server:**
+```bash
+# Start development server with hot reload
+trunk serve
 
-# reference yew framework
-git clone https://github.com/jyasuu/yew-demo.git
+# Or specify a custom port
+trunk serve --port 8080
+```
 
-# reference gemini and openapi client
-git clone https://github.com/jyasuu/chat-cli.git
-# chat-cli/src/gemini.rs
-# chat-cli/src/openai.rs
+4. **Production build:**
+```bash
+trunk build --release
+```
 
-
+### Quick Setup Commands
+```bash
+# Alternative manual setup (if needed)
 wget https://github.com/trunk-rs/trunk/releases/download/v0.21.14/trunk-x86_64-unknown-linux-gnu.tar.gz
 tar -xvf trunk-x86_64-unknown-linux-gnu.tar.gz
 ./trunk serve
-
 ```
 
-# original
+### Configuration
 
-# help me generate a application specification
+1. **Provider Setup**: Configure your LLM providers in the settings panel:
+   - **OpenAI**: Add API key from https://platform.openai.com/api-keys
+   - **Gemini**: Get API key from https://makersuite.google.com/app/apikey
+   - **OpenRouter**: Register at https://openrouter.ai/ for access to multiple models
+   - **Ollama**: Install locally for offline model access
 
-## develop tools
+2. **Function Tools**: Enable built-in tools or create custom ones using the visual editor
 
-it is a only frontend web application . no server side.
-any data storage requirement should consider use browser local storage.
+3. **MCP Integration**: Configure Model Context Protocol servers for enhanced capabilities
 
-1. rust
-2. yew framework
-3. html + tailwindcss
+## 🎯 Core Components
 
+### Main Application (`FlexibleLLMPlayground`)
+The central component managing application state, provider configuration, and coordination between UI elements.
 
+**Key Features:**
+- Session management with persistent storage
+- Flexible provider switching
+- Function tool execution coordination
+- MCP client integration
+- Real-time streaming support
 
-## here is what I think.
+### API Clients (`api_clients/`)
 
-1. it  a llm api playgound
-2. it support gemini api and open api compatible
-3. there is some ui components features
-    1. chat room
-    2. session history and switch
-    3. llm configuration 
-        1. gemini key and models
-        2. openapi url and token and models
-        3. temperature
-        4. retry and rate limit delay
-        5. system prompts define
-        6. function call tools define multiple tools with name ,description, parameters(just a  mock define ,so when llm decide to use it just display it in chatroom and return a configurable value to llm)
-        7. structure output define a complex schema(just a  mock define ,so when llm decide to use it just display it in chatroom )
-        8. sse mcp server
-
-## advice me others features
-
-
-# specification
-
-Got it ✅ You’re designing a **frontend-only LLM API playground** using **Rust + Yew + TailwindCSS**, with **local storage** as the persistence layer.
-
-Here’s a **refined application specification** with your listed features plus additional ideas that would make the playground powerful, flexible, and easy to use:
-
----
-
-# Application Specification: LLM Playground (Frontend Only)
-
-## Development Tools
-
-* **Rust**: core language
-* **Yew**: frontend web framework
-* **TailwindCSS**: styling and layout
-* **Local Storage**: persistence for configs, sessions, and history
-
----
-
-## Core Features
-
-### 1. **Chat Interface**
-
-* Multi-turn chat UI (assistant + user bubbles).
-* Support markdown rendering (code blocks, tables, links).
-* Support streaming responses (if API provides SSE or chunked responses).
-* Message retry + edit & resend.
-* Inline display of structured outputs and mock tool calls.
-
----
-
-### 2. **Session Management**
-
-* Create, switch, and delete chat sessions.
-* Persist session history in local storage.
-* Search/filter across past sessions.
-* Export/import sessions (JSON file).
-* Pin sessions for quick access.
-
----
-
-### 3. **LLM Configuration Panel**
-
-* **Gemini API**
-
-  * Key input
-  * Model selection
-* **OpenAI-compatible API**
-
-  * Base URL
-  * Token
-  * Model selection
-* **Shared settings**
-
-  * Temperature slider
-  * Max tokens
-  * Retry & rate-limit delay
-  * System prompt editor
-  * Function call mock definitions
-  * Structured output mock definitions
-  * SSE MCP server config
-
----
-
-## Extended Features (Recommendations)
-
-### 4. **UI Enhancements**
-
-* **Tabs for multiple models** in a single session (compare responses).
-* **Drag & drop reorder** messages.
-* **Collapsible messages** (useful for very long outputs).
-* **Syntax highlighting** for code snippets.
-* **Copy-to-clipboard** buttons for outputs.
-* **Dark/Light theme toggle**.
-
----
-
-### 5. **Mock Tools / Function Calling**
-
-* Define a list of tools with:
-
-  * name, description, expected input/output format
-  * mock return values (static JSON, random values, or user-provided input)
-* When LLM “calls” the tool:
-
-  * Show tool invocation in chat stream
-  * Return the configured mock response to continue conversation
-
----
-
-### 6. **Structured Output Preview**
-
-* Define output schema (JSON structure).
-* When LLM responds with structured data, parse & render as:
-
-  * JSON viewer
-  * Table or form (if schema is simple enough)
-
----
-
-### 7. **Multi-Model Playground**
-
-* Side-by-side comparison of outputs from:
-
-  * Gemini model vs. OpenAI-compatible model
-  * Different configurations (temperature, system prompts)
-
----
-
-### 8. **Data Persistence & Portability**
-
-* Local Storage for:
-
-  * sessions
-  * configs
-  * tool definitions
-* Import/Export:
-
-  * full config
-  * individual sessions
-* Optionally, allow **IndexedDB** for larger histories.
-
----
-
-### 9. **Developer Features**
-
-* **Request/Response Inspector**:
-
-  * Show raw request JSON sent to API.
-  * Show raw API response (before formatting).
-* **Rate Limit Monitor**:
-
-  * Track request counts & delay injection logs.
-* **Error Handling UI**:
-
-  * Display API errors in a readable format.
-
----
-
-### 10. **Security Considerations**
-
-* Warn user: API keys stored only in local storage (not secure for shared browsers).
-* Option to **mask keys** in UI until revealed.
-
----
-
-### 11. **Future Expandability**
-
-* Support additional LLM APIs (Anthropic, Ollama, local inference endpoints).
-* Add **plugin system** so users can define new tool mocks easily.
-* Provide **hotkeys** for power users (send, new session, switch).
-
----
-
-## Suggested Feature Roadmap
-
-* **MVP**: Chat room, session storage, config (API + key + model), system prompt, temperature.
-* **Phase 2**: Function calling mocks, structured outputs, export/import.
-* **Phase 3**: Multi-model comparison, raw inspector, session search.
-* **Phase 4**: Theming, extensibility, plugin system.
-
----
-
-Perfect 🚀 Let’s map out a **Yew component architecture diagram** for your **LLM Playground**.
-This will show **component hierarchy + responsibilities + local storage interaction**.
-
----
-
-# Yew Component Architecture
-
-```
-App
-│
-├── Navbar
-│    ├── Title / Logo
-│    ├── ThemeToggle
-│    └── ConfigButton (open/close LLMConfigPanel)
-│
-├── Sidebar (SessionManager)
-│    ├── SessionList
-│    │    ├── SessionItem (select / delete / pin)
-│    ├── NewSessionButton
-│    └── SearchBox
-│
-├── MainArea
-│    ├── ChatRoom
-│    │    ├── MessageList
-│    │    │    ├── MessageBubble (user / assistant)
-│    │    │    │    ├── MarkdownRenderer
-│    │    │    │    ├── CodeBlock (syntax highlighting + copy)
-│    │    │    │    └── ToolCallView / StructuredOutputView
-│    │    └── InputBar
-│    │         ├── TextArea
-│    │         ├── SendButton
-│    │         └── Edit & Resend / Retry
-│    │
-│    └── MultiModelCompare (optional future)
-│
-└── FloatingPanels
-     ├── LLMConfigPanel
-     │    ├── ApiConfig (Gemini + OpenAI-compatible)
-     │    ├── SharedSettings (temperature, retry, tokens)
-     │    ├── SystemPromptEditor
-     │    ├── FunctionCallMockEditor
-     │    └── StructuredOutputMockEditor
-     │
-     ├── ImportExportPanel
-     └── InspectorPanel (raw API request/response)
-```
-
----
-
-# Component Responsibilities
-
-### **App**
-
-* Root state manager (sessions, configs, UI state).
-* LocalStorage load/save.
-* Route state to children.
-
-### **Navbar**
-
-* Global actions: theme toggle, open config.
-* Displays app title.
-
-### **Sidebar / SessionManager**
-
-* Manages session list.
-* CRUD sessions (create, rename, delete).
-* Search & pinning.
-* Persist session metadata in local storage.
-
-### **ChatRoom**
-
-* Displays current session chat.
-* Sends API requests via fetch/SSE.
-* Handles streaming & retries.
-
-### **MessageList / MessageBubble**
-
-* Renders conversation history.
-* Supports markdown + code highlighting.
-* Detects special message types:
-
-  * **Tool Call** → show as `ToolCallView`.
-  * **Structured Output** → show as `StructuredOutputView`.
-
-### **InputBar**
-
-* User input area.
-* Multi-line editing.
-* Buttons for send, retry, edit/resend.
-
-### **LLMConfigPanel**
-
-* Manage API endpoints + tokens + models.
-* Adjust generation params (temp, tokens).
-* Define system prompts.
-* Define mock tool calls + mock structured outputs.
-* Save to local storage.
-
-### **InspectorPanel**
-
-* Show raw API requests/responses for debugging.
-* Optional toggle in config.
-
-### **ImportExportPanel**
-
-* Export sessions/configs as JSON.
-* Import back into local storage.
-
----
-
-# Local Storage Schema (Draft)
-
-```json
-{
-  "sessions": {
-    "session_id_1": {
-      "title": "Gemini test",
-      "messages": [
-        { "role": "system", "content": "..." },
-        { "role": "user", "content": "Hello" },
-        { "role": "assistant", "content": "Hi there!" }
-      ],
-      "created_at": "2025-09-18T12:00:00Z"
-    }
-  },
-  "config": {
-    "gemini": { "api_key": "xxx", "model": "gemini-1.5-pro" },
-    "openai": { "url": "https://api.openai.com/v1", "token": "xxx", "model": "gpt-4o" },
-    "shared": { "temperature": 0.7, "max_tokens": 2048, "retry_delay": 2000 },
-    "system_prompt": "You are a helpful assistant",
-    "function_tools": [ { "name": "search", "return": "{...}" } ],
-    "structured_outputs": [ { "schema": "{...}" } ]
-  }
+**Unified Client Interface (`traits.rs`)**
+```rust
+pub trait LLMClient {
+    fn send_message(...) -> Future<Output = Result<LLMResponse, String>>;
+    fn send_message_stream(...) -> Future<Output = Result<(), String>>;
+    fn get_available_models(...) -> Future<Output = Result<Vec<String>, String>>;
 }
 ```
 
----
+**Provider Implementations:**
+- `OpenAIClient`: OpenAI API integration with function calling
+- `GeminiClient`: Google Gemini API with streaming support
+- Extensible architecture for additional providers
 
-# State Flow Example
+### Flexible Provider System (`provider_config.rs`)
 
-1. User opens `App` → loads sessions/configs from LocalStorage.
-2. User selects a session in `Sidebar` → `ChatRoom` loads its messages.
-3. User sends a message in `InputBar` → `ChatRoom` triggers API call.
-4. Response streams in → `MessageList` updates UI.
-5. If tool call → `ToolCallView` shows → mock value returned → appended as assistant message.
-6. All changes persisted back to LocalStorage.
+**Multi-Provider Configuration:**
+```rust
+pub struct FlexibleApiConfig {
+    pub providers: Vec<ProviderConfig>,     // Multiple provider configs
+    pub router: RouterConfig,               // Provider routing rules
+    pub function_tools: Vec<FunctionTool>,  // Available function tools
+    pub mcp_config: McpConfig,             // MCP integration settings
+}
+```
+
+**Provider Types:**
+- OpenRouter (multiple models, free tier available)
+- Gemini (Google's models with OpenAI-compatible endpoint)
+- OpenAI (official API)
+- Ollama (local models)
+- Custom providers via configuration
+
+### Function Tools System (`builtin_tools.rs`)
+
+**Built-in Categories:**
+- **HTTP**: Web requests and API calls
+- **File System**: File and directory operations
+- **Search**: Content and pattern matching
+- **System**: Command execution
+- **Agent**: Sub-agent task delegation
+- **Web**: Web search and content fetching
+- **Weather**: Real-time weather data
+- **Planning**: Task and TODO management
+- **IDE**: Development environment integration
+
+**Tool Execution:**
+```rust
+pub async fn execute_builtin_tool(
+    tool_name: &str,
+    arguments: &Value,
+    mcp_client: Option<&McpClient>,
+) -> Result<Value, String>
+```
+
+### UI Components (`components/`)
+
+**Chat Interface:**
+- `Chatroom`: Main conversation display
+- `MessageBubble`: Individual message rendering with markdown support
+- `InputBar`: Message composition with auto-resize
+- `FunctionCallHandler`: Function execution visualization
+
+**Configuration:**
+- `FlexibleSettingsPanel`: Provider and model configuration
+- `ModelSelector`: Dynamic model selection
+- `VisualFunctionToolEditor`: Interactive tool creation
+- `McpSettingsPanel`: MCP server configuration
+
+**Session Management:**
+- `ChatHeader`: Session info and controls
+- `Sidebar`: Session list and navigation
+- `Notification`: System alerts and feedback
+
+### MCP Integration (`mcp_client.rs`)
+
+Model Context Protocol support for enhanced AI capabilities:
+- Server connection management
+- Tool discovery and registration
+- Resource access coordination
+- Protocol compliance and error handling
+
+## 🔧 Development Guide
+
+### Building
+
+```bash
+# Development build with debug info
+trunk serve --port 8000
+
+# Production optimized build
+trunk build --release
+
+# Manual WebAssembly build
+wasm-pack build --target web --dev
+```
+
+### Testing
+
+```bash
+# Run Rust unit tests
+cargo test
+
+# Run with specific features
+cargo test --features "test-mode"
+
+# Browser testing (requires wasm-pack-test)
+wasm-pack test --headless --firefox
+```
+
+### Adding New Providers
+
+1. **Implement the `LLMClient` trait:**
+```rust
+pub struct CustomClient;
+
+impl LLMClient for CustomClient {
+    // Implement required methods
+}
+```
+
+2. **Add provider configuration:**
+```rust
+ProviderConfig {
+    name: "custom".to_string(),
+    api_base_url: "https://api.custom.com/v1".to_string(),
+    api_key: String::new(),
+    models: vec!["custom-model".to_string()],
+    transformer: TransformerConfig {
+        r#use: vec!["openai".to_string()], // or "gemini"
+    },
+}
+```
+
+3. **Register in the flexible client:**
+Update `FlexibleLLMClient` to handle your new provider.
+
+### Creating Custom Function Tools
+
+**Via Code:**
+```rust
+FunctionTool {
+    name: "my_tool".to_string(),
+    description: "Description of what the tool does".to_string(),
+    parameters: serde_json::json!({
+        "type": "object",
+        "properties": {
+            "input": {
+                "type": "string",
+                "description": "Input parameter"
+            }
+        },
+        "required": ["input"]
+    }),
+    mock_response: r#"{"result": "success"}"#.to_string(),
+    enabled: true,
+    category: "Custom".to_string(),
+    is_builtin: false,
+}
+```
+
+**Via Visual Editor:**
+Use the integrated visual function tool editor for interactive creation and testing.
+
+## 📋 Type System
+
+### Core Types (`types.rs`)
+
+**Message Structure:**
+```rust
+pub struct Message {
+    pub id: String,
+    pub role: MessageRole,
+    pub content: String,
+    pub timestamp: f64,
+    pub function_call: Option<serde_json::Value>,
+    pub function_response: Option<serde_json::Value>,
+}
+```
+
+**Configuration:**
+```rust
+pub struct ApiConfig {
+    pub gemini: GeminiConfig,
+    pub openai: OpenAIConfig,
+    pub current_provider: ApiProvider,
+    pub shared_settings: SharedSettings,
+    pub function_tools: Vec<FunctionTool>,
+    pub mcp_config: McpConfig,
+}
+```
+
+**Function Tools:**
+```rust
+pub struct FunctionTool {
+    pub name: String,
+    pub description: String,
+    pub parameters: serde_json::Value,
+    pub mock_response: String,
+    pub enabled: bool,
+    pub category: String,
+    pub is_builtin: bool,
+}
+```
+
+## 🔍 Key Features Deep Dive
+
+### Streaming Support
+Real-time response streaming with token-by-token display and function call handling during streaming.
+
+### Session Persistence
+Automatic saving of chat sessions, provider configurations, and user preferences to browser localStorage.
+
+### Error Handling & Retry Logic
+Intelligent retry mechanisms for rate limits and network errors with exponential backoff.
+
+### Function Call Visualization
+Rich display of function calls, parameters, and responses with syntax highlighting and collapsible views.
+
+### MCP Protocol Integration
+Full support for Model Context Protocol servers, enabling advanced AI capabilities and resource access.
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Make your changes with proper documentation
+4. Add tests for new functionality
+5. Ensure all tests pass (`cargo test`)
+6. Submit a pull request with a clear description
+
+### Development Guidelines
+- Follow Rust naming conventions and best practices
+- Add comprehensive documentation for public APIs
+- Include unit tests for new functionality
+- Use the existing component patterns for UI consistency
+- Update this README for significant architectural changes
+
+## 🔗 References
+
+### Development Tools & Dependencies
+- **Yew Framework**: https://yew.rs/
+- **Trunk**: https://trunkrs.dev/
+- **WebAssembly**: https://webassembly.org/
+
+### Referenced Projects
+- **MCP Rust SDK**: https://github.com/modelcontextprotocol/rust-sdk
+- **Yew Demo Examples**: https://github.com/jyasuu/yew-demo
+- **Chat CLI Reference**: https://github.com/jyasuu/chat-cli
+
+### API Documentation
+- **OpenAI API**: https://platform.openai.com/docs
+- **Gemini API**: https://developers.generativeai.google/
+- **OpenRouter**: https://openrouter.ai/docs
+- **Model Context Protocol**: https://modelcontextprotocol.io/
