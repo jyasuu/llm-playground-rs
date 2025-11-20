@@ -45,33 +45,50 @@ pub enum UnifiedMessageRole {
     Assistant,
 }
 
-// Updated LLMClient trait with unified interface
-pub trait LLMClient {
+// Represents a client that can send non-streaming messages
+pub trait MessageSender {
     fn send_message(
         &self,
         messages: &[UnifiedMessage],
         config: &ApiConfig,
         system_prompt: Option<&str>,
-    ) -> Pin<Box<dyn Future<Output = Result<LLMResponse, String>>>>;
+    ) -> Pin<Box<dyn Future<Output = Result<LLMResponse, String>> + '_>>;
+}
 
+// Represents a client that can send streaming messages
+pub trait StreamingSender {
     fn send_message_stream(
         &self,
         messages: &[UnifiedMessage],
         config: &ApiConfig,
         system_prompt: Option<&str>,
         callback: StreamCallback,
-    ) -> Pin<Box<dyn Future<Output = Result<(), String>>>>;
+    ) -> Pin<Box<dyn Future<Output = Result<(), String>> + '_>>;
+}
 
-    fn client_name(&self) -> &str;
-
-    // Get available models from the API
+// Represents a client that can provide a list of available models
+pub trait ModelProvider {
     fn get_available_models(
         &self,
         config: &ApiConfig,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<String>, String>>>>;
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<String>, String>> + '_>>;
+}
 
-    // Convert from the legacy Message format to UnifiedMessage
+// Represents a utility for converting message formats
+pub trait MessageConverter {
     fn convert_legacy_messages(&self, messages: &[Message]) -> Vec<UnifiedMessage>;
+}
+
+// Represents a client that has a name
+pub trait NamedClient {
+    fn client_name(&self) -> &str;
+}
+
+// Updated LLMClient trait composed of smaller, focused traits.
+// Any client that implements all the smaller traits automatically implements LLMClient.
+pub trait LLMClient:
+    MessageSender + StreamingSender + ModelProvider + MessageConverter + NamedClient
+{
 }
 
 // Trait for conversation management
@@ -84,7 +101,7 @@ pub trait ConversationManager {
     fn get_conversation_history(&self) -> &[ConversationMessage];
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct ConversationMessage {
     pub role: String,
     pub content: String,

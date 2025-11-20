@@ -1,6 +1,7 @@
 // Flexible LLM client that can work with any provider configuration
-use crate::llm_playground::api_clients::{
-    GeminiClient, LLMClient, LLMResponse, OpenAIClient, StreamCallback, UnifiedMessage,
+use super::api_clients::{
+    GeminiClient, LLMClient, LLMResponse, OpenAIClient, StreamCallback,
+    UnifiedMessageRole,
 };
 use crate::llm_playground::{
     provider_config::{FlexibleApiConfig, ProviderConfig},
@@ -19,7 +20,7 @@ impl FlexibleLLMClient {
     }
 
     /// Get the appropriate client for the current session provider
-    fn get_client_for_provider(&self, provider: &ProviderConfig) -> Box<dyn LLMClient> {
+    fn get_client_for_provider(&self, provider: &ProviderConfig) -> Box<dyn LLMClient + 'static> {
         // Determine which client to use based on the transformer configuration
         if provider.transformer.r#use.contains(&"gemini".to_string()) {
             Box::new(GeminiClient::new())
@@ -128,15 +129,20 @@ impl FlexibleLLMClient {
             // Convert legacy messages to unified format
             let unified_messages = client.convert_legacy_messages(messages);
             
-            // Extract system prompt from config
+            // Clone system prompt to avoid lifetime issues
             let system_prompt = if config.system_prompt.is_empty() {
                 None
             } else {
-                Some(config.system_prompt.as_str())
+                Some(config.system_prompt.clone())
             };
             
             log!("📤 Sending to {} client with {} unified messages...", client.client_name(), unified_messages.len());
-            client.send_message(&unified_messages, &legacy_config, system_prompt)
+            
+            // Clone data to move into the async block
+            Box::pin(async move {
+                let system_prompt_ref = system_prompt.as_ref().map(|s| s.as_str());
+                client.send_message(&unified_messages, &legacy_config, system_prompt_ref).await
+            })
         } else {
             let provider_name_clone = provider_name.clone();
             log!("❌ Provider '{}' not found in config", &provider_name);
@@ -158,14 +164,17 @@ impl FlexibleLLMClient {
             // Convert legacy messages to unified format
             let unified_messages = client.convert_legacy_messages(messages);
             
-            // Extract system prompt from config
+            // Clone system prompt to avoid lifetime issues
             let system_prompt = if config.system_prompt.is_empty() {
                 None
             } else {
-                Some(config.system_prompt.as_str())
+                Some(config.system_prompt.clone())
             };
             
-            client.send_message_stream(&unified_messages, &legacy_config, system_prompt, callback)
+            Box::pin(async move {
+                let system_prompt_ref = system_prompt.as_ref().map(|s| s.as_str());
+                client.send_message_stream(&unified_messages, &legacy_config, system_prompt_ref, callback).await
+            })
         } else {
             Box::pin(async move { Err(format!("Provider '{}' not found", provider_name)) })
         }
@@ -180,7 +189,10 @@ impl FlexibleLLMClient {
         if let Some(provider) = config.get_provider(&provider_name) {
             let client = self.get_client_for_provider(provider);
             let legacy_config = self.create_legacy_config(provider, config, &provider.models[0]);
-            client.get_available_models(&legacy_config)
+            
+            Box::pin(async move {
+                client.get_available_models(&legacy_config).await
+            })
         } else {
             Box::pin(async move { Err(format!("Provider '{}' not found", provider_name)) })
         }
