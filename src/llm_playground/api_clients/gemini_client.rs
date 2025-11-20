@@ -1,7 +1,8 @@
 // Gemini API client for WASM
 use crate::llm_playground::api_clients::{
-    ConversationManager, ConversationMessage, FunctionCallRequest, FunctionResponse, LLMClient,
-    LLMResponse, StreamCallback, UnifiedMessage, UnifiedMessageRole,
+    FunctionCallRequest, FunctionResponse, LLMClient,
+    LLMResponse, MessageConverter, MessageSender, ModelProvider, NamedClient, StreamCallback,
+    StreamingSender, UnifiedMessage, UnifiedMessageRole,
 };
 use crate::llm_playground::{ApiConfig, Message, MessageRole};
 use gloo_console::log;
@@ -80,17 +81,11 @@ struct Candidate {
     finish_reason: Option<String>,
 }
 
-pub struct GeminiClient {
-    conversation_history: Vec<ConversationMessage>,
-    system_prompt: Option<String>,
-}
+pub struct GeminiClient;
 
 impl GeminiClient {
     pub fn new() -> Self {
-        Self {
-            conversation_history: Vec::new(),
-            system_prompt: None,
-        }
+        Self {}
     }
 
     fn convert_unified_messages_to_contents(
@@ -110,42 +105,6 @@ impl GeminiClient {
                     function_response: None,
                 }],
             });
-        }
-
-        // Add conversation history
-        for conv_msg in &self.conversation_history {
-            let mut parts = Vec::new();
-
-            if !conv_msg.content.is_empty() {
-                parts.push(Part {
-                    text: Some(conv_msg.content.clone()),
-                    function_call: None,
-                    function_response: None,
-                });
-            }
-
-            if let Some(fc) = &conv_msg.function_call {
-                parts.push(Part {
-                    text: None,
-                    function_call: Some(fc.clone()),
-                    function_response: None,
-                });
-            }
-
-            if let Some(fr) = &conv_msg.function_response {
-                parts.push(Part {
-                    text: None,
-                    function_call: None,
-                    function_response: Some(fr.clone()),
-                });
-            }
-
-            if !parts.is_empty() {
-                contents.push(Content {
-                    parts,
-                    role: conv_msg.role.clone(),
-                });
-            }
         }
 
         // Add new unified messages
@@ -282,13 +241,13 @@ impl GeminiClient {
     }
 }
 
-impl LLMClient for GeminiClient {
+impl MessageSender for GeminiClient {
     fn send_message(
         &self,
         messages: &[UnifiedMessage],
         config: &ApiConfig,
         system_prompt: Option<&str>,
-    ) -> Pin<Box<dyn Future<Output = Result<LLMResponse, String>>>> {
+    ) -> Pin<Box<dyn Future<Output = Result<LLMResponse, String>> + '_>> {
         let (contents, system_instruction) = self.convert_unified_messages_to_contents(messages, system_prompt);
         let tools = self.build_tools(config);
         let api_key = config.gemini.api_key.clone();
@@ -419,14 +378,16 @@ impl LLMClient for GeminiClient {
             })
         })
     }
+}
 
+impl StreamingSender for GeminiClient {
     fn send_message_stream(
         &self,
         messages: &[UnifiedMessage],
         config: &ApiConfig,
         system_prompt: Option<&str>,
         callback: StreamCallback,
-    ) -> Pin<Box<dyn Future<Output = Result<(), String>>>> {
+    ) -> Pin<Box<dyn Future<Output = Result<(), String>> + '_>> {
         let (contents, system_instruction) = self.convert_unified_messages_to_contents(messages, system_prompt);
         let tools = self.build_tools(config);
         let api_key = config.gemini.api_key.clone();
@@ -434,7 +395,7 @@ impl LLMClient for GeminiClient {
         let base_url = config.gemini.base_url.clone();
         let temperature = config.shared_settings.temperature;
         let max_tokens = config.shared_settings.max_tokens;
-        let config_clone = config.clone();
+        let _config_clone = config.clone();
 
         Box::pin(async move {
             log!("Gemini streaming API call started");
@@ -491,15 +452,19 @@ impl LLMClient for GeminiClient {
             Ok(())
         })
     }
+}
 
+impl NamedClient for GeminiClient {
     fn client_name(&self) -> &str {
         "Gemini"
     }
+}
 
+impl ModelProvider for GeminiClient {
     fn get_available_models(
         &self,
         config: &ApiConfig,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<String>, String>>>> {
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<String>, String>> + '_>> {
         let api_key = config.gemini.api_key.clone();
         let base_url = config.gemini.base_url.clone();
 
@@ -562,7 +527,9 @@ impl LLMClient for GeminiClient {
             Ok(model_names)
         })
     }
+}
 
+impl MessageConverter for GeminiClient {
     fn convert_legacy_messages(&self, messages: &[Message]) -> Vec<UnifiedMessage> {
         let mut unified_messages = Vec::new();
 
@@ -632,50 +599,9 @@ impl LLMClient for GeminiClient {
     }
 }
 
-impl ConversationManager for GeminiClient {
-    fn add_user_message(&mut self, message: &str) {
-        self.conversation_history.push(ConversationMessage {
-            role: "user".to_string(),
-            content: message.to_string(),
-            function_call: None,
-            function_response: None,
-        });
-    }
+impl LLMClient for GeminiClient {}
 
-    fn add_assistant_message(&mut self, message: &str, function_call: Option<serde_json::Value>) {
-        self.conversation_history.push(ConversationMessage {
-            role: "model".to_string(),
-            content: message.to_string(),
-            function_call,
-            function_response: None,
-        });
-    }
 
-    fn add_function_response(&mut self, function_response: &FunctionResponse) {
-        self.conversation_history.push(ConversationMessage {
-            role: "user".to_string(),
-            content: String::new(),
-            function_call: None,
-            function_response: Some(serde_json::json!({
-                "id": function_response.id,
-                "name": function_response.name,
-                "response": function_response.response
-            })),
-        });
-    }
-
-    fn clear_conversation(&mut self) {
-        self.conversation_history.clear();
-    }
-
-    fn set_system_prompt(&mut self, prompt: &str) {
-        self.system_prompt = Some(prompt.to_string());
-    }
-
-    fn get_conversation_history(&self) -> &[ConversationMessage] {
-        &self.conversation_history
-    }
-}
 
 #[cfg(test)]
 mod tests {

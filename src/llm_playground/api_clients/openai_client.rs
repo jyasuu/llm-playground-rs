@@ -1,7 +1,8 @@
 // OpenAI-compatible API client for WASM
 use crate::llm_playground::api_clients::{
-    ConversationManager, ConversationMessage, FunctionCallRequest, FunctionResponse, LLMClient,
-    LLMResponse, StreamCallback, UnifiedMessage, UnifiedMessageRole,
+    FunctionCallRequest, FunctionResponse, LLMClient,
+    LLMResponse, MessageConverter, MessageSender, ModelProvider, NamedClient, StreamCallback,
+    StreamingSender, UnifiedMessage, UnifiedMessageRole,
 };
 use crate::llm_playground::{ApiConfig, Message, MessageRole};
 use gloo_console::log;
@@ -62,17 +63,11 @@ struct Choice {
     message: OpenAIMessage,
 }
 
-pub struct OpenAIClient {
-    conversation_history: Vec<ConversationMessage>,
-    system_prompt: Option<String>,
-}
+pub struct OpenAIClient;
 
 impl OpenAIClient {
     pub fn new() -> Self {
-        Self {
-            conversation_history: Vec::new(),
-            system_prompt: None,
-        }
+        Self {}
     }
 
     // Helper function to sleep for a specified duration
@@ -96,91 +91,6 @@ impl OpenAIClient {
                 tool_calls: None,
                 tool_call_id: None,
             });
-        }
-
-        // Add conversation history
-        for conv_msg in &self.conversation_history {
-            log!("conv_msg_json");
-            let conv_msg_json = serde_json::json!(conv_msg.clone());
-            log!(conv_msg_json.to_string());
-
-            if !conv_msg.content.is_empty()
-                || conv_msg.function_call.is_some()
-                || conv_msg.function_response.is_some()
-            {
-                let role = match conv_msg.role.as_str() {
-                    "user" => "user",
-                    "assistant" | "model" => "assistant",
-                    "tool" => "tool",
-                    _ => "user",
-                };
-
-                let mut openai_msg = OpenAIMessage {
-                    role: role.to_string(),
-                    content: if conv_msg.content.is_empty() && conv_msg.function_call.is_some() {
-                        None
-                    } else {
-                        Some(conv_msg.content.clone())
-                    },
-                    name: None,
-                    tool_calls: None,
-                    tool_call_id: None,
-                };
-
-                // Handle function calls from assistant messages
-                if let Some(fc) = &conv_msg.function_call {
-                    if role == "assistant" {
-                        // Convert function call JSON to proper tool_calls format
-                        if let Ok(func_calls) =
-                            serde_json::from_value::<Vec<serde_json::Value>>(fc.clone())
-                        {
-                            let mut tool_calls = Vec::new();
-                            for func_call in func_calls {
-                                if let (Some(id), Some(name), Some(args)) = (
-                                    func_call.get("id").and_then(|v| v.as_str()),
-                                    func_call.get("name").and_then(|v| v.as_str()),
-                                    func_call.get("arguments"),
-                                ) {
-                                    tool_calls.push(ToolCall {
-                                        id: id.to_string(),
-                                        call_type: "function".to_string(),
-                                        function: FunctionCall {
-                                            name: name.to_string(),
-                                            arguments: serde_json::to_string(args)
-                                                .unwrap_or_default(),
-                                        },
-                                    });
-                                }
-                            }
-                            if !tool_calls.is_empty() {
-                                openai_msg.tool_calls = Some(tool_calls);
-                            }
-                        }
-                    }
-                }
-
-                // Handle function responses
-                if let Some(fr) = &conv_msg.function_response {
-                    if role == "tool" {
-                        if let Some(call_id) = fr.get("id").and_then(|v| v.as_str()) {
-                            openai_msg.tool_call_id = Some(call_id.to_string());
-                        }
-                        if let Some(func_name) = fr.get("name").and_then(|v| v.as_str()) {
-                            openai_msg.name = Some(func_name.to_string());
-                        }
-                        if let Some(response_data) = fr.get("response") {
-                            openai_msg.content =
-                                Some(serde_json::to_string(response_data).unwrap_or_default());
-                        }
-                    }
-                }
-
-                log!("openai_msg_json");
-                let openai_msg_json = serde_json::json!(openai_msg.clone());
-                log!(openai_msg_json.to_string());
-
-                openai_messages.push(openai_msg);
-            }
         }
 
         // Add new unified messages
@@ -230,7 +140,7 @@ impl OpenAIClient {
                 openai_messages.push(openai_msg);
             } else {
                 // Regular message
-                let mut openai_msg = OpenAIMessage {
+                let openai_msg = OpenAIMessage {
                     role: role.to_string(),
                     content: message.content.clone(),
                     name: None,
@@ -369,14 +279,13 @@ impl OpenAIClient {
     }
 }
 
-impl LLMClient for OpenAIClient {
+impl MessageSender for OpenAIClient {
     fn send_message(
         &self,
         messages: &[UnifiedMessage],
         config: &ApiConfig,
         system_prompt: Option<&str>,
-    ) -> Pin<Box<dyn Future<Output = Result<LLMResponse, String>>>> {
-        let self_clone = self.clone();
+    ) -> Pin<Box<dyn Future<Output = Result<LLMResponse, String>> + '_>> {
         let messages_clone = messages.to_vec();
         let config_clone = config.clone();
         let system_prompt_clone = system_prompt.map(|s| s.to_string());
@@ -391,13 +300,13 @@ impl LLMClient for OpenAIClient {
                 return Err("Please configure your OpenAI API key in Settings".to_string());
             }
 
-            let openai_messages = self_clone.convert_unified_messages_to_openai(&messages_clone, system_prompt_clone.as_deref());
+            let openai_messages = self.convert_unified_messages_to_openai(&messages_clone, system_prompt_clone.as_deref());
 
             log!("openai_messages_json");
             let openai_messages_json = serde_json::json!(openai_messages.clone());
             log!(openai_messages_json.to_string());
 
-            let tools = self_clone.build_tools(&config_clone);
+            let tools = self.build_tools(&config_clone);
 
             let request_body = OpenAIRequest {
                 model: config_clone.openai.model,
@@ -513,14 +422,16 @@ impl LLMClient for OpenAIClient {
             })
         })
     }
+}
 
+impl StreamingSender for OpenAIClient {
     fn send_message_stream(
         &self,
         messages: &[UnifiedMessage],
         config: &ApiConfig,
         system_prompt: Option<&str>,
         callback: StreamCallback,
-    ) -> Pin<Box<dyn Future<Output = Result<(), String>>>> {
+    ) -> Pin<Box<dyn Future<Output = Result<(), String>> + '_>> {
         let openai_messages = self.convert_unified_messages_to_openai(messages, system_prompt);
         let tools = self.build_tools(config);
         let api_key = config.openai.api_key.clone();
@@ -584,15 +495,19 @@ impl LLMClient for OpenAIClient {
             Ok(())
         })
     }
+}
 
+impl NamedClient for OpenAIClient {
     fn client_name(&self) -> &str {
         "OpenAI"
     }
+}
 
+impl ModelProvider for OpenAIClient {
     fn get_available_models(
         &self,
         config: &ApiConfig,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<String>, String>>>> {
+    ) -> Pin<Box<dyn Future<Output = Result<Vec<String>, String>> + '_>> {
         let api_key = config.openai.api_key.clone();
         let base_url = config.openai.base_url.clone();
 
@@ -651,7 +566,9 @@ impl LLMClient for OpenAIClient {
             Ok(model_names)
         })
     }
+}
 
+impl MessageConverter for OpenAIClient {
     fn convert_legacy_messages(&self, messages: &[Message]) -> Vec<UnifiedMessage> {
         let mut unified_messages = Vec::new();
         let mut function_call_id_counter = 0u32;
@@ -723,60 +640,11 @@ impl LLMClient for OpenAIClient {
     }
 }
 
-impl ConversationManager for OpenAIClient {
-    fn add_user_message(&mut self, message: &str) {
-        self.conversation_history.push(ConversationMessage {
-            role: "user".to_string(),
-            content: message.to_string(),
-            function_call: None,
-            function_response: None,
-        });
-    }
+impl LLMClient for OpenAIClient {}
 
-    fn add_assistant_message(&mut self, message: &str, function_call: Option<serde_json::Value>) {
-        self.conversation_history.push(ConversationMessage {
-            role: "assistant".to_string(),
-            content: message.to_string(),
-            function_call,
-            function_response: None,
-        });
-    }
 
-    fn add_function_response(&mut self, function_response: &FunctionResponse) {
-        self.conversation_history.push(ConversationMessage {
-            role: "tool".to_string(),
-            content: serde_json::to_string(&function_response.response).unwrap_or_default(),
-            function_call: None,
-            function_response: Some(serde_json::json!({
-                "id": function_response.id,
-                "name": function_response.name,
-                "response": function_response.response
-            })),
-        });
-    }
 
-    fn clear_conversation(&mut self) {
-        self.conversation_history.clear();
-    }
 
-    fn set_system_prompt(&mut self, prompt: &str) {
-        self.system_prompt = Some(prompt.to_string());
-    }
-
-    fn get_conversation_history(&self) -> &[ConversationMessage] {
-        &self.conversation_history
-    }
-}
-
-// We need Clone for the OpenAI client to work with the async trait
-impl Clone for OpenAIClient {
-    fn clone(&self) -> Self {
-        Self {
-            conversation_history: self.conversation_history.clone(),
-            system_prompt: self.system_prompt.clone(),
-        }
-    }
-}
 
 #[cfg(test)]
 mod tests {
